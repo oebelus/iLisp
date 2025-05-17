@@ -43,6 +43,7 @@ pub enum TokenType {
     IF,
     ELSE,
     FUN,
+    LIST,
 }
 
 impl Clone for TokenType {
@@ -75,6 +76,7 @@ impl Clone for TokenType {
             Self::IF => Self::IF,
             Self::ELSE => Self::ELSE,
             Self::FUN => Self::FUN,
+            Self::LIST => Self::LIST,
         }
     }
 }

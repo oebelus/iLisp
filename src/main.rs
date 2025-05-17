@@ -1,3 +1,4 @@
+mod parser;
 mod tests;
 mod tokenizer;
 mod tokens;
@@ -6,6 +7,8 @@ use std::{
     io::{stdin, stdout, Write},
     process::exit,
 };
+
+use parser::{item, result, seq, zero};
 
 fn read() -> String {
     print!("> ");
@@ -40,5 +43,14 @@ fn repl() {
 }
 
 fn main() {
-    repl()
+    // repl();
+
+    let parser1 = result("1");
+    let parser2 = result("2");
+    let parser3 = result("+");
+    let combined = seq(vec![parser1, parser2, parser3]);
+
+    let output = combined("addition".to_string());
+
+    println!("{:?}", output);
 }

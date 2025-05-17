@@ -246,6 +246,7 @@ fn get_keywords() -> HashMap<&'static str, TokenType> {
     keywords.insert("define", TokenType::FUN);
     keywords.insert("if", TokenType::IF);
     keywords.insert("cond", TokenType::COND);
+    keywords.insert("list", TokenType::LIST);
 
     keywords
 }
