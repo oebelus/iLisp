@@ -77,3 +77,20 @@ pub fn seq<'a, A: Clone + 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, Vec<A>>
         vec![(results, current_input)]
     })
 }
+
+pub fn any_of<'a, A: 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, Vec<A>> {
+    Box::new(move |input| {
+        for parser in &parsers {
+            let result = parser(input.clone());
+
+            if !result.is_empty() {
+                return result
+                    .into_iter()
+                    .map(|(a, rest)| (vec![a], rest))
+                    .collect();
+            }
+        }
+
+        return Vec::new();
+    })
+}

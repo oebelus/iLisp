@@ -8,7 +8,7 @@ use std::{
     process::exit,
 };
 
-use parser::{item, result, seq, zero};
+use parser::{result, seq, any_of};
 
 fn read() -> String {
     print!("> ");
@@ -48,7 +48,7 @@ fn main() {
     let parser1 = result("1");
     let parser2 = result("2");
     let parser3 = result("+");
-    let combined = seq(vec![parser1, parser2, parser3]);
+    let combined = any_of(vec![parser1, parser2, parser3]);
 
     let output = combined("addition".to_string());
 
