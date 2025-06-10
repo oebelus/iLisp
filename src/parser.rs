@@ -57,7 +57,13 @@ pub fn div<'a, A: 'a + Copy + std::ops::Div<Output = A>>(a: Parser<'a, A>) -> Pa
     })
 }
 
-pub fn seq<'a, A: Clone + 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, Vec<A>> {
+// pub fn binary<'a, A: 'a + Copy + std::ops::Div<Output = A>>(a: Parser<'a, A>) -> Parser<'a, A> {}
+
+pub fn seq<'a, A: Clone + 'a, F, B>(function: F, parsers: Vec<Parser<'a, A>>) -> Parser<'a, B>
+where
+    F: Fn(Vec<A>) -> B + 'a,
+    B: Clone + 'a,
+{
     Box::new(move |input| {
         let mut results = Vec::new();
         let mut current_input = input;
@@ -74,6 +80,22 @@ pub fn seq<'a, A: Clone + 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, Vec<A>>
             current_input = remaining.clone();
         }
 
-        vec![(results, current_input)]
+        vec![(function(results), current_input)]
+    })
+}
+
+pub fn one_of<'a, A: Clone + 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, A> {
+    Box::new(move |input| {
+        for parser in &parsers {
+            let result = parser(input.clone());
+
+            if result.is_empty() {
+                continue;
+            } else {
+                return result;
+            }
+        }
+
+        return Vec::new();
     })
 }

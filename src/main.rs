@@ -45,12 +45,15 @@ fn repl() {
 fn main() {
     // repl();
 
-    let parser1 = result("1");
-    let parser2 = result("2");
-    let parser3 = result("+");
-    let combined = seq(vec![parser1, parser2, parser3]);
+    let parser1 = result("5");
+    let parser2 = result("4");
+    let parser3 = result("7");
+    let combined = seq(
+        |nums: Vec<&str>| nums.iter().map(|s| s.parse::<i32>().unwrap()).sum::<i32>(),
+        vec![parser1, parser2, parser3],
+    );
 
-    let output = combined("addition".to_string());
+    let output = combined("Summation".to_string());
 
     println!("{:?}", output);
 }
