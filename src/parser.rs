@@ -1,68 +1,141 @@
-type Parser<'a, A> = Box<dyn Fn(String) -> Vec<(A, String)> + 'a>;
+use std::{collections::HashMap, vec};
 
-pub fn result<'a, A: Clone + 'a>(v: A) -> Parser<'a, A> {
-    Box::new(move |input| vec![(v.clone(), input)])
-}
+type Parser<'a, String> = Box<dyn Fn(String) -> Vec<(String, String)> + 'a>;
 
-pub fn zero<'a, A: 'a>() -> Parser<'a, A> {
-    Box::new(move |_| vec![])
-}
-
-pub fn item<'a>() -> Parser<'a, char> {
-    Box::new(move |input| {
-        if input.is_empty() {
-            vec![]
+pub fn get_digits(input: &str) -> (String, String) {
+    let mut digits = String::new();
+    for i in input.chars() {
+        if i.is_numeric() {
+            digits.push(i);
         } else {
-            vec![(
-                input.clone().chars().nth(0).unwrap(),
-                input[1..].to_string(),
-            )]
+            break;
+        }
+    }
+
+    let length = input.len() - digits.len();
+
+    (digits, input[length..].to_owned())
+}
+
+pub fn integer<'a>() -> Parser<'a, String> {
+    Box::new(move |stream: String| {
+        let (matched, rest) = get_digits(&stream);
+
+        if matched.is_empty() {
+            vec![(String::new(), stream.to_owned())]
+        } else {
+            vec![(matched, rest)]
         }
     })
 }
 
-pub fn plus<'a, A: 'a + Copy + std::ops::Add<Output = A>>(a: Parser<'a, A>) -> Parser<'a, A> {
+pub fn plus<'a>() -> Parser<'a, String> {
     Box::new(move |input| {
-        vec![(
-            a(input.clone())[0].0 + a(input.clone())[0].0,
-            "".to_string(),
-        )]
+        if input.as_bytes()[0] as char == '+' {
+            vec![("+".to_string(), input[1..].to_string())]
+        } else {
+            vec![(String::new(), input)]
+        }
     })
 }
 
-pub fn minus<'a, A: 'a + Copy + std::ops::Sub<Output = A>>(a: Parser<'a, A>) -> Parser<'a, A> {
+pub fn minus<'a>() -> Parser<'a, String> {
     Box::new(move |input| {
-        vec![(
-            a(input.clone())[0].0 - a(input.clone())[0].0,
-            "".to_string(),
-        )]
+        if input.as_bytes()[0] as char == '-' {
+            vec![("-".to_string(), input[1..].to_string())]
+        } else {
+            vec![(String::new(), input)]
+        }
     })
 }
 
-pub fn mul<'a, A: 'a + Copy + std::ops::Mul<Output = A>>(a: Parser<'a, A>) -> Parser<'a, A> {
+pub fn mul<'a>() -> Parser<'a, String> {
     Box::new(move |input| {
-        vec![(
-            a(input.clone())[0].0 * a(input.clone())[0].0,
-            "".to_string(),
-        )]
+        if input.as_bytes()[0] as char == '*' {
+            vec![("*".to_string(), input[1..].to_string())]
+        } else {
+            vec![(String::new(), input)]
+        }
     })
 }
 
-pub fn div<'a, A: 'a + Copy + std::ops::Div<Output = A>>(a: Parser<'a, A>) -> Parser<'a, A> {
+pub fn div<'a>() -> Parser<'a, String> {
     Box::new(move |input| {
-        vec![(
-            a(input.clone())[0].0 / a(input.clone())[0].0,
-            "".to_string(),
-        )]
+        if input.as_bytes()[0] as char == '-' {
+            vec![("-".to_string(), input[1..].to_string())]
+        } else {
+            vec![(String::new(), input)]
+        }
     })
 }
 
-// pub fn binary<'a, A: 'a + Copy + std::ops::Div<Output = A>>(a: Parser<'a, A>) -> Parser<'a, A> {}
+pub fn operations<'a>() -> Parser<'a, String> {
+    let parsers: Vec<Parser<'a, String>> = vec![plus(), minus(), mul(), div()];
+    one_of::<String>(parsers)
+}
 
-pub fn seq<'a, A: Clone + 'a, F, B>(function: F, parsers: Vec<Parser<'a, A>>) -> Parser<'a, B>
+pub fn make_ops() -> HashMap<String, fn(Vec<String>) -> String> {
+    let mut operations: HashMap<String, fn(Vec<String>) -> String> = HashMap::new();
+
+    operations.insert("+".to_string(), |nums| {
+        let sum: i32 = nums.iter().map(|s| s.parse::<i32>().unwrap_or(0)).sum();
+        sum.to_string()
+    });
+    operations.insert("-".to_string(), |nums| {
+        let parsed: Vec<i32> = nums.iter().map(|s| s.parse::<i32>().unwrap_or(0)).collect();
+        if parsed.is_empty() {
+            0.to_string()
+        } else {
+            (parsed[0] - parsed[1..].iter().sum::<i32>()).to_string()
+        }
+    });
+    operations.insert("*".to_string(), |nums| {
+        let product: i32 = nums.iter().map(|s| s.parse::<i32>().unwrap_or(0)).product();
+        product.to_string()
+    });
+    operations.insert("/".to_string(), |nums| {
+        let mut res = 1;
+        for n in nums {
+            res = n.parse::<i32>().unwrap_or(1) / res;
+        }
+        res.to_string()
+    });
+
+    operations
+}
+
+pub fn binary<'a>(left: Parser<'a, String>, right: Parser<'a, String>) -> Parser<'a, String> {
+    let op_parser = operations();
+
+    Box::new(move |input| {
+        let op_result = op_parser(input.clone());
+        if op_result[0].0.is_empty() {
+            return vec![(String::new(), input)];
+        }
+
+        // seq(make_ops()[&op_result[0].0], vec![integer(), integer()]);
+        let (op_val, remaining_after_op) = op_result[0].clone();
+
+        let left_result = left(remaining_after_op.clone());
+        if left_result[0].0.is_empty() {
+            return vec![(String::new(), input)];
+        }
+        let (left_val, remaining_after_left) = &left_result[0];
+
+        let right_result = right(remaining_after_left.clone());
+        if right_result[0].0.is_empty() {
+            return vec![(String::new(), input)];
+        }
+        let (right_val, remaining_after_right) = &right_result[0];
+
+        let combined = format!("{} {} {}", left_val, op_val, right_val);
+        vec![(combined, remaining_after_right.to_string())]
+    })
+}
+
+pub fn seq<'a, F>(function: F, parsers: Vec<Parser<'a, String>>) -> Parser<'a, String>
 where
-    F: Fn(Vec<A>) -> B + 'a,
-    B: Clone + 'a,
+    F: Fn(Vec<String>) -> String + 'a,
 {
     Box::new(move |input| {
         let mut results = Vec::new();
@@ -80,18 +153,22 @@ where
             current_input = remaining.clone();
         }
 
+        // println!(
+        //     "RES {:?}",
+        //     vec![(function(results.clone()), current_input.clone())]
+        // );
+
         vec![(function(results), current_input)]
     })
 }
 
-pub fn one_of<'a, A: Clone + 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, A> {
+pub fn one_of<'a, A: Clone + 'a>(parsers: Vec<Parser<'a, String>>) -> Parser<'a, String> {
     Box::new(move |input| {
         for parser in &parsers {
             let result = parser(input.clone());
 
-            if result.is_empty() {
-                continue;
-            } else {
+            if !result[0].0.is_empty() {
+                println!("Result: {:?}", result);
                 return result;
             }
         }
@@ -100,19 +177,19 @@ pub fn one_of<'a, A: Clone + 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, A> {
     })
 }
 
-pub fn any_of<'a, A: 'a>(parsers: Vec<Parser<'a, A>>) -> Parser<'a, Vec<A>> {
-    Box::new(move |input| {
-        for parser in &parsers {
-            let result = parser(input.clone());
+// pub fn any_of<'a>(parsers: Vec<Parser<'a, String>>) -> Parser<'a, Vec<String>> {
+//     Box::new(move |input| {
+//         for parser in &parsers {
+//             let result = parser(input.clone());
 
-            if !result.is_empty() {
-                return result
-                    .into_iter()
-                    .map(|(a, rest)| (vec![a], rest))
-                    .collect();
-            }
-        }
+//             if !result.is_empty() {
+//                 return result
+//                     .into_iter()
+//                     .map(|(a, rest)| (vec![a], rest))
+//                     .collect();
+//             }
+//         }
 
-        return Vec::new();
-    })
-}
+//         return Vec::new();
+//     })
+// }

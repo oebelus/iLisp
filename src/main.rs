@@ -8,7 +8,9 @@ use std::{
     process::exit,
 };
 
-use parser::{any_of, result, seq};
+use parser::seq;
+
+use crate::parser::{binary, integer};
 
 fn read() -> String {
     print!("> ");
@@ -45,15 +47,8 @@ fn repl() {
 fn main() {
     // repl();
 
-    let parser1 = result("5");
-    let parser2 = result("4");
-    let parser3 = result("7");
-    let combined = seq(
-        |nums: Vec<&str>| nums.iter().map(|s| s.parse::<i32>().unwrap()).sum::<i32>(),
-        vec![parser1, parser2, parser3],
-    );
+    let binary_parser = binary(integer(), integer());
 
-    let output = combined("Summation".to_string());
-
-    println!("{:?}", output);
+    println!("{:?}", binary_parser("+123 456".to_string()));
+    println!("{:?}", binary_parser("-100 50".to_string()));
 }
