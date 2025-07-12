@@ -2,6 +2,27 @@ use std::{rc::Rc, vec};
 
 type Parser<'a, String> = Rc<dyn Fn(String) -> Vec<(String, String)> + 'a>;
 
+pub fn parse<'a>(input: &str) -> Vec<(String, String)> {
+    let mut stream = input.to_string();
+    let mut remaining_string = String::new();
+    let mut result = String::new();
+
+    while !stream.is_empty() {
+        let parser = binary(integer(), integer());
+        let results = parser(stream.clone().to_string());
+
+        if let Some((res, remaining)) = results.first() {
+            result.push_str(res);
+            remaining_string = remaining.clone();
+            stream = remaining.clone();
+        } else {
+            break;
+        }
+    }
+
+    vec![(result, remaining_string)]
+}
+
 pub fn get_digits(input: &str) -> (String, String) {
     let mut digits = String::new();
     let mut index = 0;
@@ -86,7 +107,7 @@ pub fn div<'a>() -> Parser<'a, String> {
 }
 
 pub fn operations<'a>() -> Parser<'a, String> {
-    let parsers: Vec<Parser<'a, String>> = vec![plus(), minus(), mul(), div()];
+    let parsers: Vec<Parser<'a, String>> = vec![mul(), div(), plus(), minus()];
     one_of::<String>(parsers)
 }
 

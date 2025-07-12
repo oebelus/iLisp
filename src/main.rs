@@ -8,9 +8,7 @@ use std::{
     process::exit,
 };
 
-use parser::seq;
-
-use crate::parser::{binary, integer};
+use crate::parser::parse;
 
 fn read() -> String {
     print!("> ");
@@ -47,8 +45,6 @@ fn repl() {
 fn main() {
     // repl();
 
-    let binary_parser = binary(integer(), integer());
-
-    println!("{:?}", binary_parser("-123 456 - 11".to_string()));
+    println!("{:?}", parse("-123 456 - 11"));
     // println!("{:?}", binary_parser("-100 50 dfgfdg".to_string()));
 }
