@@ -8,7 +8,8 @@ use std::{
     process::exit,
 };
 
-use crate::parser::parse;
+use crate::parser::Parser;
+use crate::parser::{identifier, literal, pair};
 
 fn read() -> String {
     print!("> ");
@@ -45,6 +46,9 @@ fn repl() {
 fn main() {
     // repl();
 
-    println!("{:?}", parse("-123 456 - 11"));
-    // println!("{:?}", binary_parser("-100 50 dfgfdg".to_string()));
+    // (* (- 4 2) 3)
+
+    let paren_open = pair(literal("("), identifier);
+
+    println!("{:?}", paren_open.parse("(my-first-element)"));
 }
