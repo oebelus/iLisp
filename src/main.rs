@@ -1,3 +1,4 @@
+mod globals;
 mod parser;
 mod tests;
 mod tokenizer;
@@ -8,8 +9,8 @@ use std::{
     process::exit,
 };
 
-use crate::parser::Parser;
-use crate::parser::{identifier, literal, pair};
+use crate::parser::{identifier, match_literal, pair, parse_binary};
+use crate::parser::{one_or_more, Parser};
 
 fn read() -> String {
     print!("> ");
@@ -48,7 +49,7 @@ fn main() {
 
     // (* (- 4 2) 3)
 
-    let paren_open = pair(literal("("), identifier);
+    let parser = parse_binary();
 
-    println!("{:?}", paren_open.parse("(my-first-element)"));
+    println!("{:?}", parser.parse("(* 4 5)"));
 }
