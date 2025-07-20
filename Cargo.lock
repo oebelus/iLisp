@@ -5,3 +5,11 @@ version = 4
 [[package]]
 name = "ilisp"
 version = "0.1.0"
+dependencies = [
+ "parsenator",
+]
+
+[[package]]
+name = "parsenator"
+version = "0.1.0"
+source = "git+https://github.com/oebelus/parsenator?branch=main#e01c390e885610163bdc03396d57367750bbd864"

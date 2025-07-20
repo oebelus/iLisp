@@ -9,8 +9,9 @@ use std::{
     process::exit,
 };
 
-use crate::parser::{identifier, match_literal, pair, parse_binary};
-use crate::parser::{one_or_more, Parser};
+use parsenator::*;
+
+use crate::parser::my_parser;
 
 fn read() -> String {
     print!("> ");
@@ -45,11 +46,6 @@ fn repl() {
 }
 
 fn main() {
-    // repl();
-
-    // (* (- 4 2) 3)
-
-    let parser = parse_binary();
-
-    println!("{:?}", parser.parse("(* 4 5)"));
+    let parser = my_parser().parse("(defun doublen (n) (* n 2))");
+    println!("{:?}", parser);
 }
