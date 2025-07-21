@@ -1,10 +1,10 @@
 use parsenator::*;
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParserResult {
-    String(String),
-    StrVec(Vec<ParserResult>),
+    Value(String),
+    List(Vec<ParserResult>),
 }
 
 pub fn my_parser() -> impl Parser<'static, Vec<ParserResult>> {
@@ -15,52 +15,69 @@ pub fn my_parser() -> impl Parser<'static, Vec<ParserResult>> {
                 .filter(|x| !x.to_string().is_empty())
                 .map(|x| x.to_string())
                 .collect();
-            println!("{:?}", mapped);
-            Ok((remaining, convert(mapped, vec![], vec![], 0)))
+
+            display_tree(&mapped);
+            Ok((remaining, convert(&mapped)))
         }
         Err(e) => Err(ParseError::Message(format!("{:?}", e))),
     }
 }
 
-pub fn convert(
-    parser_result: Vec<String>,
-    result: Vec<ParserResult>,
-    stack: Vec<ParserResult>,
-    mut nest: i32,
-) -> Vec<ParserResult> {
-    if parser_result.is_empty() {
-        result
-    } else {
-        if parser_result[0] == "(".to_string() {
-            nest += 1;
-            convert(parser_result[1..].to_vec(), result, stack, nest)
-        } else if parser_result[0] == ")".to_string() {
-            let mut new_result = result;
-            new_result.push(ParserResult::StrVec(stack));
-            nest -= 1;
-            convert(parser_result[1..].to_vec(), new_result, vec![], nest)
-        } else {
-            if nest == 1 {
-                let mut new_result = result;
-                new_result.push(ParserResult::String(parser_result[0].clone()));
-                convert(parser_result[1..].to_vec(), new_result, stack, nest)
-            } else {
-                let mut new_stack = stack;
-                new_stack.push(ParserResult::String(parser_result[0].clone()));
-                convert(parser_result[1..].to_vec(), result, new_stack, nest)
+pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), String> {
+    let mut result = Vec::new();
+    let mut remaining = tokens;
+
+    while !remaining.is_empty() {
+        match remaining[0].as_str() {
+            "(" => {
+                let (nested, new_remaining) = parse_list(&remaining[1..])?;
+                result.push(ParserResult::List(nested));
+                remaining = new_remaining;
+            }
+            ")" => {
+                return Ok((result, &remaining[1..]));
+            }
+            token => {
+                result.push(ParserResult::Value(token.to_string()));
+                remaining = &remaining[1..];
             }
         }
     }
+
+    Ok((result, remaining))
 }
 
-pub fn skip<'a, A: 'a>(parser: Box<dyn Parser<'a, A> + 'a>) -> Box<dyn Parser<'a, Types<'a>> + 'a> {
-    Box::new(move |input| match parser.parse(input) {
-        Ok((next, _result)) => Ok((next, Types::Unit(()))),
-        Err(e) => Err(ParseError::Unexpected(format!(
-            "Unexpected input '{}', error being : {:?}.",
-            input, e
-        ))),
-    })
+pub fn display_tree(tokens: &[String]) {
+    let mut remaining = tokens;
+    let mut padding_level = 0;
+    const PADDING_SIZE: usize = 4;
+
+    while !remaining.is_empty() {
+        match remaining[0].as_str() {
+            "(" => {
+                println!("{:indent$}(", "", indent = padding_level * PADDING_SIZE);
+                padding_level += 1;
+            }
+            ")" => {
+                println!("{:indent$})", "", indent = padding_level * PADDING_SIZE);
+                padding_level -= 1;
+            }
+            token => println!(
+                "{:indent$}{}",
+                "",
+                token,
+                indent = padding_level * PADDING_SIZE
+            ),
+        }
+        remaining = &remaining[1..];
+    }
+}
+
+pub fn convert(tokens: &[String]) -> Vec<ParserResult> {
+    match parse_list(tokens) {
+        Ok((result, _)) => result,
+        Err(_) => vec![],
+    }
 }
 
 pub fn atom<'a>() -> Box<dyn Parser<'a, Types<'a>> + 'a> {

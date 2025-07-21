@@ -1,5 +1,6 @@
 mod globals;
 mod parser;
+mod tests;
 mod tokenizer;
 mod tokens;
 
@@ -9,6 +10,7 @@ use std::{
 };
 
 use parsenator::*;
+pub use parser::ParserResult;
 
 use crate::parser::my_parser;
 

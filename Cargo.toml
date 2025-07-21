@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 parsenator = { git = "https://github.com/oebelus/parsenator", branch = "main" }
+
+[[test]]
+name = "parser"
+path = "tests/mod.rs"
