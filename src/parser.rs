@@ -33,7 +33,7 @@ pub fn convert(
     } else {
         if parser_result[0] == "(".to_string() {
             nest += 1;
-            convert(parser_result[1..].to_vec(), result, vec![], nest)
+            convert(parser_result[1..].to_vec(), result, stack, nest)
         } else if parser_result[0] == ")".to_string() {
             let mut new_result = result;
             new_result.push(ParserResult::StrVec(stack));
@@ -43,7 +43,7 @@ pub fn convert(
             if nest == 1 {
                 let mut new_result = result;
                 new_result.push(ParserResult::String(parser_result[0].clone()));
-                convert(parser_result[1..].to_vec(), new_result, stack, 0)
+                convert(parser_result[1..].to_vec(), new_result, stack, nest)
             } else {
                 let mut new_stack = stack;
                 new_stack.push(ParserResult::String(parser_result[0].clone()));
