@@ -3,8 +3,39 @@ use parsenator::*;
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum ParserResult {
-    Value(String),
-    List(Vec<ParserResult>),
+    Atom(Element),
+    Expression(Vec<ParserResult>),
+}
+
+#[derive(PartialEq, Debug)]
+pub enum Kind {
+    Identifier,
+    Literal,
+    Function,
+    Condition,
+    Binary,
+    Unary,
+    Print,
+    Assign,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Element {
+    pub kind: Kind,
+    pub value: String,
+}
+
+impl ToString for ParserResult {
+    fn to_string(&self) -> String {
+        match self {
+            ParserResult::Atom(s) => s.value.clone(),
+            ParserResult::Expression(items) => items
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join(" "),
+        }
+    }
 }
 
 pub fn my_parser() -> impl Parser<'static, Vec<ParserResult>> {
@@ -16,8 +47,9 @@ pub fn my_parser() -> impl Parser<'static, Vec<ParserResult>> {
                 .map(|x| x.to_string())
                 .collect();
 
-            display_tree(&mapped);
-            Ok((remaining, convert(&mapped)))
+            let converted = convert(&mapped);
+            display_tree(&converted, 0);
+            Ok((remaining, converted))
         }
         Err(e) => Err(ParseError::Message(format!("{:?}", e))),
     }
@@ -31,14 +63,69 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
         match remaining[0].as_str() {
             "(" => {
                 let (nested, new_remaining) = parse_list(&remaining[1..])?;
-                result.push(ParserResult::List(nested));
+                result.push(ParserResult::Expression(nested));
                 remaining = new_remaining;
             }
             ")" => {
                 return Ok((result, &remaining[1..]));
             }
             token => {
-                result.push(ParserResult::Value(token.to_string()));
+                let binary = vec!["+", "-", "/", "*", "&", "|", "<", "<=", ">", ">=", "=="];
+                let unary = vec!["!"];
+
+                let mut value = token;
+                let kind = match value {
+                    "define" => Kind::Function,
+                    "if" => Kind::Condition,
+                    "format" => Kind::Print,
+                    "let" => Kind::Assign,
+                    "<" => {
+                        if remaining[1].as_str() == "=" {
+                            value = "<=";
+                            remaining = &remaining[1..];
+                            Kind::Binary
+                        } else {
+                            Kind::Binary
+                        }
+                    }
+                    ">" => {
+                        if remaining[1].as_str() == "=" {
+                            value = ">=";
+                            remaining = &remaining[1..];
+                            Kind::Binary
+                        } else {
+                            Kind::Binary
+                        }
+                    }
+                    "=" => {
+                        value = "==";
+                        remaining = &remaining[1..];
+                        Kind::Binary
+                    }
+                    "*" => {
+                        if remaining[1].as_str() == "*" {
+                            value = "**";
+                            remaining = &remaining[1..];
+                            Kind::Binary
+                        } else {
+                            Kind::Binary
+                        }
+                    }
+                    _ if (value.starts_with("\"") && value.ends_with("\""))
+                        | value.bytes().all(|c| c.is_ascii_digit()) =>
+                    {
+                        Kind::Literal
+                    }
+                    _ if unary.contains(&value) => Kind::Unary,
+                    _ if binary.contains(&value) => Kind::Binary,
+                    _ => Kind::Identifier,
+                };
+
+                result.push(ParserResult::Atom(Element {
+                    kind,
+                    value: value.to_string(),
+                }));
+
                 remaining = &remaining[1..];
             }
         }
@@ -47,29 +134,28 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
     Ok((result, remaining))
 }
 
-pub fn display_tree(tokens: &[String]) {
-    let mut remaining = tokens;
-    let mut padding_level = 0;
+pub fn display_tree(tokens: &[ParserResult], indent: usize) {
+    let padding_level = indent;
     const PADDING_SIZE: usize = 4;
 
-    while !remaining.is_empty() {
-        match remaining[0].as_str() {
-            "(" => {
+    for token in tokens {
+        match token {
+            ParserResult::Atom(element) => {
+                println!(
+                    "{:indent$}{}",
+                    "",
+                    element.value,
+                    indent = padding_level * PADDING_SIZE
+                );
+            }
+            ParserResult::Expression(parser_results) => {
                 println!("{:indent$}(", "", indent = padding_level * PADDING_SIZE);
-                padding_level += 1;
-            }
-            ")" => {
+
+                display_tree(parser_results, padding_level + 1);
+
                 println!("{:indent$})", "", indent = padding_level * PADDING_SIZE);
-                padding_level -= 1;
             }
-            token => println!(
-                "{:indent$}{}",
-                "",
-                token,
-                indent = padding_level * PADDING_SIZE
-            ),
         }
-        remaining = &remaining[1..];
     }
 }
 

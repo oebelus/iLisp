@@ -1,4 +1,5 @@
 mod globals;
+mod interpreter;
 mod parser;
 mod tests;
 mod tokenizer;
@@ -48,8 +49,8 @@ fn repl() {
 
 fn main() {
     let parser = my_parser().parse(
-        "(defun fib (n)
-  (if (< n 2)
+        "(define fib (n)
+  (if (<= n 2)
       n
       (+ (fib (- n 1))
          (fib (- n 2)))))",
