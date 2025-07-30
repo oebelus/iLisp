@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::parser::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Operation {
     Add,
     Mul,
@@ -75,7 +75,6 @@ impl Interpret for Interpreter {
         match self.current_token() {
             Some(token) => {
                 let token_clone = token.clone();
-                // println!("{:?}", self.current_token());
 
                 self.advance();
 
@@ -102,9 +101,17 @@ impl Interpret for Interpreter {
                                 Ok(r) => {
                                     let right_val =
                                         r.parse().map_err(|_| InterpretError::ParseError).unwrap();
-                                    Ok(binary(operation, left_val, right_val).to_string())
+
+                                    if operation == Operation::Neg {
+                                        Ok(binary(Operation::Sub, left_val, right_val).to_string())
+
+                                    } else {
+                                        Ok(binary(operation, left_val, right_val).to_string())
+                                    }
                                 }
-                                Err(_r) => Ok(unary(operation, left_val).to_string()),
+                                Err(_r) => {
+                                    Ok(unary(operation, left_val).to_string())
+                                },
                             }
                         }
                         Kind::Unary => {
@@ -125,6 +132,30 @@ impl Interpret for Interpreter {
 
                             Ok(unary(operation, operand_val).to_string())
                         }
+                        Kind::Comparison => {
+                            let operation = create_operation_map()
+                                .get(element.value.as_str())
+                                .ok_or_else(|| {
+                                    InterpretError::Expected(format!(
+                                        "Unknown operation: {}",
+                                        element.value
+                                    ))
+                                })?
+                                .clone();
+
+                            let left = self.interpret()?;
+                            let right = self.interpret()?;
+
+                            let left_val: i32 =
+                                left.parse().map_err(|_| InterpretError::ParseError)?;
+                            let right_val: i32 =
+                                right.parse().map_err(|_| InterpretError::ParseError)?;
+
+                            Ok(comparison(operation, left_val, right_val).to_string())
+                        }
+                        Kind::Logical => {
+                            todo!()
+                        }
                         Kind::Identifier => todo!(),
                         Kind::Literal => match element.value.parse() {
                             Ok(d) => Ok(d),
@@ -141,7 +172,7 @@ impl Interpret for Interpreter {
                     }
                 }
             }
-            None => Err(InterpretError::IndexOutOfBounds),
+            _ => Err(InterpretError::IndexOutOfBounds),
         }
     }
 }
@@ -152,14 +183,26 @@ fn binary(operation: Operation, left: i32, right: i32) -> i32 {
         Operation::Mul => left * right,
         Operation::Div => left / right,
         Operation::Sub => left - right,
-        Operation::Lt => todo!(),
-        Operation::Lte => todo!(),
-        Operation::Gt => todo!(),
-        Operation::Gte => todo!(),
-        Operation::And => todo!(),
-        Operation::Or => todo!(),
-        Operation::Equ => todo!(),
-        _ => 0,
+        _ => 0
+    }
+}
+
+fn comparison(operation: Operation, left: i32, right: i32) -> bool {
+    match operation {
+        Operation::Lt => left < right,
+        Operation::Lte => left <= right,
+        Operation::Gt => left > right,
+        Operation::Gte => left >= right,
+        Operation::Equ => left == right,
+        _ => false
+    }
+}
+
+fn logical(operation: Operation, left: bool, right: bool) -> bool {
+    match operation {
+        Operation::And => left && right,
+        Operation::Or => left || right,
+        _ => false
     }
 }
 

@@ -13,6 +13,8 @@ pub enum Kind {
     Function,
     Condition,
     Binary,
+    Logical,
+    Comparison,
     Unary,
     Print,
     Assign,
@@ -83,19 +85,19 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                             value = "<=";
                             remaining = &remaining[1..];
                         }
-                        Kind::Binary
+                        Kind::Logical
                     }
                     ">" => {
                         if remaining[1].as_str() == "=" {
                             value = ">=";
                             remaining = &remaining[1..];
                         }
-                        Kind::Binary
+                        Kind::Logical
                     }
                     "=" => {
                         value = "==";
                         remaining = &remaining[1..];
-                        Kind::Binary
+                        Kind::Logical
                     }
                     "*" => {
                         if remaining[1].as_str() == "*" {

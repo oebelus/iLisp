@@ -1,4 +1,3 @@
-mod globals;
 mod interpreter;
 mod parser;
 mod tokenizer;
@@ -50,8 +49,10 @@ fn repl() {
 }
 
 fn main() {
-    let parser = my_parser().parse("(+ 4 (+ 5 (- 20)))");
+    let parser = my_parser().parse("(+ (* (/ 60 3) 700001) (* (- 205 7 ) (-3)))");
     println!("Parser result: {:?}\n", parser);
     let mut interpreter = Interpreter::new(parser.unwrap().1);
     println!("Interpreter result: {:?}", interpreter.interpret());
 }
+
+
