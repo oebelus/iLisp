@@ -1,7 +1,6 @@
 mod globals;
 mod interpreter;
 mod parser;
-mod tests;
 mod tokenizer;
 mod tokens;
 
@@ -13,7 +12,10 @@ use std::{
 use parsenator::*;
 pub use parser::ParserResult;
 
-use crate::parser::my_parser;
+use crate::{
+    interpreter::{Interpret, Interpreter},
+    parser::my_parser,
+};
 
 fn read() -> String {
     print!("> ");
@@ -48,12 +50,8 @@ fn repl() {
 }
 
 fn main() {
-    let parser = my_parser().parse(
-        "(define fib (n)
-  (if (<= n 2)
-      n
-      (+ (fib (- n 1))
-         (fib (- n 2)))))",
-    );
-    println!("{:?}", parser);
+    let parser = my_parser().parse("(+ 4 (+ 5 (- 20)))");
+    println!("Parser result: {:?}\n", parser);
+    let mut interpreter = Interpreter::new(parser.unwrap().1);
+    println!("Interpreter result: {:?}", interpreter.interpret());
 }

@@ -1,13 +1,12 @@
 use parsenator::*;
 
-#[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParserResult {
     Atom(Element),
     Expression(Vec<ParserResult>),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Kind {
     Identifier,
     Literal,
@@ -19,7 +18,7 @@ pub enum Kind {
     Assign,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Element {
     pub kind: Kind,
     pub value: String,
@@ -83,19 +82,15 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                         if remaining[1].as_str() == "=" {
                             value = "<=";
                             remaining = &remaining[1..];
-                            Kind::Binary
-                        } else {
-                            Kind::Binary
                         }
+                        Kind::Binary
                     }
                     ">" => {
                         if remaining[1].as_str() == "=" {
                             value = ">=";
                             remaining = &remaining[1..];
-                            Kind::Binary
-                        } else {
-                            Kind::Binary
                         }
+                        Kind::Binary
                     }
                     "=" => {
                         value = "==";
@@ -106,10 +101,8 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                         if remaining[1].as_str() == "*" {
                             value = "**";
                             remaining = &remaining[1..];
-                            Kind::Binary
-                        } else {
-                            Kind::Binary
                         }
+                        Kind::Binary
                     }
                     _ if (value.starts_with("\"") && value.ends_with("\""))
                         | value.bytes().all(|c| c.is_ascii_digit()) =>
@@ -171,7 +164,7 @@ pub fn atom<'a>() -> Box<dyn Parser<'a, Types<'a>> + 'a> {
         skip(spaces()),
         word(),
         alpha_num_word(),
-        alpha_num(),
+        digits(),
         any_char(),
         spaces(),
     ])
