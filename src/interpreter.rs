@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::parser::*;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Operation {
     Add,
     Mul,
@@ -19,12 +19,17 @@ pub enum Operation {
     Not,
 }
 
-pub fn create_operation_map() -> HashMap<&'static str, Operation> {
+pub fn create_binary_map() -> HashMap<&'static str, Operation> {
     let mut map = HashMap::new();
     map.insert("+", Operation::Add);
     map.insert("*", Operation::Mul);
     map.insert("/", Operation::Div);
     map.insert("-", Operation::Sub);
+    map
+}
+
+pub fn create_logic_map() -> HashMap<&'static str, Operation> {
+    let mut map = HashMap::new();
     map.insert("<", Operation::Lt);
     map.insert("<=", Operation::Lte);
     map.insert(">", Operation::Gt);
@@ -32,6 +37,11 @@ pub fn create_operation_map() -> HashMap<&'static str, Operation> {
     map.insert("&", Operation::And);
     map.insert("|", Operation::Or);
     map.insert("==", Operation::Equ);
+    map
+}
+
+pub fn create_unary_map() -> HashMap<&'static str, Operation> {
+    let mut map = HashMap::new();
     map.insert("-", Operation::Neg);
     map.insert("!", Operation::Not);
     map
@@ -75,13 +85,14 @@ impl Interpret for Interpreter {
         match self.current_token() {
             Some(token) => {
                 let token_clone = token.clone();
+                // println!("{:?}", self.current_token());
 
                 self.advance();
 
                 match token_clone {
                     ParserResult::Atom(element) => match element.kind {
                         Kind::Binary => {
-                            let operation = create_operation_map()
+                            let operation = create_binary_map()
                                 .get(element.value.as_str())
                                 .ok_or_else(|| {
                                     InterpretError::Expected(format!(
@@ -101,23 +112,15 @@ impl Interpret for Interpreter {
                                 Ok(r) => {
                                     let right_val =
                                         r.parse().map_err(|_| InterpretError::ParseError).unwrap();
-
-                                    if operation == Operation::Neg {
-                                        Ok(binary(Operation::Sub, left_val, right_val).to_string())
-
-                                    } else {
-                                        Ok(binary(operation, left_val, right_val).to_string())
-                                    }
+                                    Ok(binary(operation, left_val, right_val).to_string())
                                 }
-                                Err(_r) => {
-                                    Ok(unary(operation, left_val).to_string())
-                                },
+                                Err(_r) => Ok(unary(operation, left_val).to_string()),
                             }
                         }
                         Kind::Unary => {
                             let operand = self.interpret()?;
 
-                            let operation = create_operation_map()
+                            let operation = create_unary_map()
                                 .get(element.value.as_str())
                                 .ok_or_else(|| {
                                     InterpretError::Expected(format!(
@@ -132,8 +135,34 @@ impl Interpret for Interpreter {
 
                             Ok(unary(operation, operand_val).to_string())
                         }
-                        Kind::Comparison => {
-                            let operation = create_operation_map()
+                        Kind::Identifier => todo!(),
+                        Kind::Literal => match element.value.parse() {
+                            Ok(d) => Ok(d),
+                            Err(_s) => todo!(),
+                        },
+                        Kind::Function => todo!(),
+                        Kind::Condition => {
+                            let boolean = self.interpret()?;
+                            println!("Boolean {}", boolean);
+                            let left_condition = self.interpret()?;
+                            println!("left {}", left_condition);
+                            let right_condition = self.interpret()?;
+
+                            match parse_bool(&boolean) {
+                                Ok(b) => {
+                                    if b {
+                                        Ok(left_condition)
+                                    } else {
+                                        Ok(right_condition)
+                                    }
+                                }
+                                Err(_) => todo!(),
+                            }
+                        }
+                        Kind::Print => todo!(),
+                        Kind::Assign => todo!(),
+                        Kind::LogicalInt => {
+                            let operation = create_logic_map()
                                 .get(element.value.as_str())
                                 .ok_or_else(|| {
                                     InterpretError::Expected(format!(
@@ -144,31 +173,38 @@ impl Interpret for Interpreter {
                                 .clone();
 
                             let left = self.interpret()?;
+
                             let right = self.interpret()?;
 
                             let left_val: i32 =
                                 left.parse().map_err(|_| InterpretError::ParseError)?;
+
                             let right_val: i32 =
                                 right.parse().map_err(|_| InterpretError::ParseError)?;
 
-                            Ok(comparison(operation, left_val, right_val).to_string())
+                            Ok(logical_int(operation, left_val, right_val)?.to_string())
                         }
-                        Kind::Logical => {
-                            todo!()
-                        }
-                        Kind::Identifier => todo!(),
-                        Kind::Literal => match element.value.parse() {
-                            Ok(d) => Ok(d),
-                            Err(_s) => todo!(),
-                        },
-                        Kind::Function => todo!(),
-                        Kind::Condition => {
-                            let keyword = self.interpret()?;
+                        Kind::LogicalBool => {
+                            let operation = create_logic_map()
+                                .get(element.value.as_str())
+                                .ok_or_else(|| {
+                                    InterpretError::Expected(format!(
+                                        "Unknown operation: {}",
+                                        element.value
+                                    ))
+                                })?
+                                .clone();
 
-                            Ok(String::new())
+                            let left = self.interpret()?;
+
+                            let right = self.interpret()?;
+
+                            let left_val: bool = parse_bool(&left).unwrap();
+                            let right_val: bool = parse_bool(&right).unwrap();
+
+                            Ok(logical_bool(operation, left_val, right_val)?.to_string())
                         }
-                        Kind::Print => todo!(),
-                        Kind::Assign => todo!(),
+                        Kind::Comparison => todo!(),
                     },
                     ParserResult::Expression(parser_results) => {
                         let mut sub_interpreter = Interpreter::new(parser_results);
@@ -176,7 +212,7 @@ impl Interpret for Interpreter {
                     }
                 }
             }
-            _ => Err(InterpretError::IndexOutOfBounds),
+            None => Err(InterpretError::IndexOutOfBounds),
         }
     }
 }
@@ -187,26 +223,32 @@ fn binary(operation: Operation, left: i32, right: i32) -> i32 {
         Operation::Mul => left * right,
         Operation::Div => left / right,
         Operation::Sub => left - right,
-        _ => 0
+        _ => 0,
     }
 }
 
-fn comparison(operation: Operation, left: i32, right: i32) -> bool {
+fn logical_int(operation: Operation, left: i32, right: i32) -> Result<bool, InterpretError> {
     match operation {
-        Operation::Lt => left < right,
-        Operation::Lte => left <= right,
-        Operation::Gt => left > right,
-        Operation::Gte => left >= right,
-        Operation::Equ => left == right,
-        _ => false
+        Operation::Lt => Ok(left < right),
+        Operation::Lte => Ok(left <= right),
+        Operation::Gt => Ok(left > right),
+        Operation::Gte => Ok(left >= right),
+        Operation::Equ => Ok(left == right),
+        _ => Err(InterpretError::Expected(format!(
+            "Expected a logical operator, but found {:?}",
+            operation
+        ))),
     }
 }
 
-fn logical(operation: Operation, left: bool, right: bool) -> bool {
+fn logical_bool(operation: Operation, left: bool, right: bool) -> Result<bool, InterpretError> {
     match operation {
-        Operation::And => left && right,
-        Operation::Or => left || right,
-        _ => false
+        Operation::And => Ok(left && right),
+        Operation::Or => Ok(left || right),
+        _ => Err(InterpretError::Expected(format!(
+            "Expected a logical operator, but found {:?}",
+            operation
+        ))),
     }
 }
 
@@ -215,5 +257,13 @@ fn unary(operation: Operation, left: i32) -> i32 {
         Operation::Neg => -left,
         Operation::Not => !left,
         _ => 0,
+    }
+}
+
+fn parse_bool(b: &str) -> Result<bool, String> {
+    match b {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err("Error converting to boolean".to_string()),
     }
 }

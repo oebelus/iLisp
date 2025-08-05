@@ -49,10 +49,8 @@ fn repl() {
 }
 
 fn main() {
-    let parser = my_parser().parse("(+ (* (/ 60 3) 700001) (* (- 205 7 ) (-3)))");
+    let parser = my_parser().parse("(if (< 5 4) 5 4)");
     println!("Parser result: {:?}\n", parser);
     let mut interpreter = Interpreter::new(parser.unwrap().1);
     println!("Interpreter result: {:?}", interpreter.interpret());
 }
-
-
