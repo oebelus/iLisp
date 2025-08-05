@@ -131,7 +131,11 @@ impl Interpret for Interpreter {
                             Err(_s) => todo!(),
                         },
                         Kind::Function => todo!(),
-                        Kind::Condition => todo!(),
+                        Kind::Condition => {
+                            let keyword = self.interpret()?;
+
+                            Ok(String::new())
+                        }
                         Kind::Print => todo!(),
                         Kind::Assign => todo!(),
                     },
