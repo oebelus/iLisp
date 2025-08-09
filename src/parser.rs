@@ -17,7 +17,6 @@ pub enum Kind {
     Comparison,
     Unary,
     Print,
-    Assign,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -79,7 +78,6 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                     "define" => Kind::Function,
                     "if" => Kind::Condition,
                     "format" => Kind::Print,
-                    "let" => Kind::Assign,
                     "<" => {
                         if remaining[1].as_str() == "=" {
                             value = "<=";

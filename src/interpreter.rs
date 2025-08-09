@@ -154,7 +154,20 @@ impl Interpret for Interpreter {
                             Ok(comparison(operation, left_val, right_val).to_string())
                         }
                         Kind::Logical => {
-                            todo!()
+                            let operation = create_operation_map()
+                                .get(element.value.as_str())
+                                .ok_or_else(|| {
+                                    InterpretError::Expected(format!(
+                                        "Unknown operation: {}",
+                                        element.value
+                                    ))
+                                })?
+                                .clone();
+
+                            let left = self.interpret()?;
+                            let right = self.interpret()?;
+
+                            Ok(logical(operation, parse_bool(left), parse_bool(right)).to_string())
                         }
                         Kind::Identifier => todo!(),
                         Kind::Literal => match element.value.parse() {
@@ -164,7 +177,6 @@ impl Interpret for Interpreter {
                         Kind::Function => todo!(),
                         Kind::Condition => todo!(),
                         Kind::Print => todo!(),
-                        Kind::Assign => todo!(),
                     },
                     ParserResult::Expression(parser_results) => {
                         let mut sub_interpreter = Interpreter::new(parser_results);
@@ -211,5 +223,13 @@ fn unary(operation: Operation, left: i32) -> i32 {
         Operation::Neg => -left,
         Operation::Not => !left,
         _ => 0,
+    }
+}
+
+fn parse_bool(val: String) -> bool {
+    match val.as_str() {
+        "true" => true,
+        "false" => false,
+        _ => false
     }
 }
