@@ -13,10 +13,10 @@ pub enum Kind {
     Function,
     Condition,
     Binary,
-    Logical,
-    Comparison,
+    LogicalInt,
+    LogicalBool,
     Unary,
-    Print,
+    Format,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -70,32 +70,34 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                 return Ok((result, &remaining[1..]));
             }
             token => {
-                let binary = vec!["+", "-", "/", "*", "&", "|", "<", "<=", ">", ">=", "=="];
+                let binary = vec!["+", "-", "/", "*"];
                 let unary = vec!["!"];
+                let logical_bool = vec!["&", "|"];
+                let logical_int = vec!["<", "<=", ">", ">=", "=="];
 
                 let mut value = token;
                 let kind = match value {
                     "define" => Kind::Function,
                     "if" => Kind::Condition,
-                    "format" => Kind::Print,
+                    "format" => Kind::Format,
                     "<" => {
                         if remaining[1].as_str() == "=" {
                             value = "<=";
                             remaining = &remaining[1..];
                         }
-                        Kind::Logical
+                        Kind::LogicalInt
                     }
                     ">" => {
                         if remaining[1].as_str() == "=" {
                             value = ">=";
                             remaining = &remaining[1..];
                         }
-                        Kind::Logical
+                        Kind::LogicalInt
                     }
                     "=" => {
                         value = "==";
                         remaining = &remaining[1..];
-                        Kind::Logical
+                        Kind::LogicalInt
                     }
                     "*" => {
                         if remaining[1].as_str() == "*" {
@@ -104,6 +106,8 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                         }
                         Kind::Binary
                     }
+                    _ if logical_bool.contains(&value) => Kind::LogicalBool,
+                    _ if logical_int.contains(&value) => Kind::LogicalInt,
                     _ if (value.starts_with("\"") && value.ends_with("\""))
                         | value.bytes().all(|c| c.is_ascii_digit()) =>
                     {
