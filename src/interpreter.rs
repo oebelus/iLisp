@@ -57,6 +57,12 @@ pub enum InterpretError {
 pub struct Interpreter {
     tokens: Vec<ParserResult>,
     position: usize,
+    environment: Environment,
+}
+
+struct Environment {
+    scopes: Vec<String>,
+    level: i32,
 }
 
 pub trait Interpret {
@@ -68,6 +74,10 @@ impl Interpreter {
         Self {
             tokens,
             position: 0,
+            environment: Environment {
+                scopes: vec![],
+                level: 0,
+            },
         }
     }
 
@@ -78,6 +88,20 @@ impl Interpreter {
     fn advance(&mut self) {
         self.position += 1
     }
+
+    fn begin_scope(&mut self) {
+        self.environment.scopes.push(String::new());
+        self.environment.level += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.environment.scopes.pop();
+        self.environment.level -= 1;
+    }
+
+    // fn define(&mut self, lexeme: String, ) {
+    //     self.environment.scopes[self.level]
+    // }
 }
 
 impl Interpret for Interpreter {
@@ -85,7 +109,6 @@ impl Interpret for Interpreter {
         match self.current_token() {
             Some(token) => {
                 let token_clone = token.clone();
-                // println!("{:?}", self.current_token());
 
                 self.advance();
 
@@ -143,24 +166,26 @@ impl Interpret for Interpreter {
                         Kind::Function => todo!(),
                         Kind::Condition => {
                             let boolean = self.interpret()?;
-                            println!("Boolean {}", boolean);
                             let left_condition = self.interpret()?;
-                            println!("left {}", left_condition);
                             let right_condition = self.interpret()?;
 
                             match parse_bool(&boolean) {
                                 Ok(b) => {
                                     if b {
+                                        println!("Left: {}", left_condition);
                                         Ok(left_condition)
                                     } else {
+                                        println!("Right: {}", right_condition);
                                         Ok(right_condition)
                                     }
                                 }
-                                Err(_) => todo!(),
+                                Err(e) => Err(InterpretError::Expected(format!(
+                                    "Expected a boolean expression, found {}. Error message: {}",
+                                    boolean, e
+                                ))),
                             }
                         }
-                        Kind::Print => todo!(),
-                        Kind::Assign => todo!(),
+                        Kind::Format => todo!(),
                         Kind::LogicalInt => {
                             let operation = create_logic_map()
                                 .get(element.value.as_str())
@@ -204,7 +229,6 @@ impl Interpret for Interpreter {
 
                             Ok(logical_bool(operation, left_val, right_val)?.to_string())
                         }
-                        Kind::Comparison => todo!(),
                     },
                     ParserResult::Expression(parser_results) => {
                         let mut sub_interpreter = Interpreter::new(parser_results);

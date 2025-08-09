@@ -15,10 +15,8 @@ pub enum Kind {
     Binary,
     LogicalInt,
     LogicalBool,
-    Comparison,
     Unary,
-    Print,
-    Assign,
+    Format,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -81,8 +79,7 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                 let kind = match value {
                     "define" => Kind::Function,
                     "if" => Kind::Condition,
-                    "format" => Kind::Print,
-                    "let" => Kind::Assign,
+                    "format" => Kind::Format,
                     "<" => {
                         if remaining[1].as_str() == "=" {
                             value = "<=";
