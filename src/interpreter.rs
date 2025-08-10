@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use crate::parser::*;
 
@@ -54,22 +54,42 @@ pub enum InterpretError {
     IndexOutOfBounds,
 }
 
-pub struct Interpreter {
+pub struct Interpreter<'a> {
     tokens: Vec<ParserResult>,
     position: usize,
-    environment: Environment,
+    environment: Environment<'a>,
 }
 
-struct Environment {
-    scopes: Vec<String>,
-    level: i32,
+struct Environment<'a> {
+    scopes: Vec<HashMap<String, Value<'a>>>,
+    level: usize,
+}
+
+enum Value<'a> {
+    Variable(String),
+    Function(&'a dyn Fn() -> ()),
 }
 
 pub trait Interpret {
     fn interpret(&mut self) -> Result<String, InterpretError>;
 }
 
-impl Interpreter {
+impl<'a> Environment<'a> {
+    fn define(&mut self, literal: String, value: Value<'a>) -> Result<Value<'a>, InterpretError> {
+        match self.scopes.get_mut(self.level) {
+            Some(m) => match m.get(&literal) {
+                Some(_l) => Err(InterpretError::Expected(format!(
+                    "'{:?}' is already defined in the scope.",
+                    literal
+                ))),
+                None => Ok(m.insert(literal, value).unwrap()),
+            },
+            None => Err(InterpretError::Expected(format!("No scope is found."))),
+        }
+    }
+}
+
+impl<'a> Interpreter<'a> {
     pub fn new(tokens: Vec<ParserResult>) -> Self {
         Self {
             tokens,
@@ -90,7 +110,7 @@ impl Interpreter {
     }
 
     fn begin_scope(&mut self) {
-        self.environment.scopes.push(String::new());
+        self.environment.scopes.push(HashMap::new());
         self.environment.level += 1;
     }
 
@@ -98,13 +118,9 @@ impl Interpreter {
         self.environment.scopes.pop();
         self.environment.level -= 1;
     }
-
-    // fn define(&mut self, lexeme: String, ) {
-    //     self.environment.scopes[self.level]
-    // }
 }
 
-impl Interpret for Interpreter {
+impl<'a> Interpret for Interpreter<'a> {
     fn interpret(&mut self) -> Result<String, InterpretError> {
         match self.current_token() {
             Some(token) => {
@@ -158,12 +174,15 @@ impl Interpret for Interpreter {
 
                             Ok(unary(operation, operand_val).to_string())
                         }
-                        Kind::Identifier => todo!(),
-                        Kind::Literal => match element.value.parse() {
-                            Ok(d) => Ok(d),
-                            Err(_s) => todo!(),
-                        },
-                        Kind::Function => todo!(),
+                        Kind::Identifier => Ok(element.value),
+                        Kind::Literal => Ok(element.value),
+                        Kind::Function => {
+                            let name = self.interpret()?;
+                            println!("{name}");
+                            let parameters: Vec<Element> = vec![];
+
+                            Ok("".to_owned())
+                        }
                         Kind::Condition => {
                             let boolean = self.interpret()?;
                             let left_condition = self.interpret()?;
@@ -172,10 +191,8 @@ impl Interpret for Interpreter {
                             match parse_bool(&boolean) {
                                 Ok(b) => {
                                     if b {
-                                        println!("Left: {}", left_condition);
                                         Ok(left_condition)
                                     } else {
-                                        println!("Right: {}", right_condition);
                                         Ok(right_condition)
                                     }
                                 }
@@ -229,6 +246,7 @@ impl Interpret for Interpreter {
 
                             Ok(logical_bool(operation, left_val, right_val)?.to_string())
                         }
+                        Kind::Separator => Ok(String::new()),
                     },
                     ParserResult::Expression(parser_results) => {
                         let mut sub_interpreter = Interpreter::new(parser_results);
