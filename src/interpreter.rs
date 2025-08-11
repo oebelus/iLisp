@@ -60,13 +60,43 @@ pub struct Interpreter {
     environment: Environment,
 }
 
+#[derive(Clone)]
 struct Environment {
-    scopes: Vec<String>,
+    scopes: Vec<HashMap<String, Function>>,
     level: i32,
+    values: Vec<HashMap<String, Function>>,
 }
 
 pub trait Interpret {
     fn interpret(&mut self) -> Result<String, InterpretError>;
+}
+
+#[derive(Clone)]
+struct Function {
+    params: Vec<String>,
+    body: Vec<ParserResult>,
+    closure: Environment,
+}
+
+impl Function {
+    fn new(params: Vec<String>, body: Vec<ParserResult>, closure: Environment) -> Self {
+        Self {
+            params,
+            body,
+            closure,
+        }
+    }
+}
+
+impl Environment {
+    pub fn define(&mut self, name: String, function: Function) {
+        if self.scopes.is_empty() {
+            self.scopes.push(HashMap::new());
+        }
+
+        let current_scope = self.scopes.last_mut().unwrap();
+        current_scope.insert(name, function);
+    }
 }
 
 impl Interpreter {
@@ -77,6 +107,7 @@ impl Interpreter {
             environment: Environment {
                 scopes: vec![],
                 level: 0,
+                values: vec![],
             },
         }
     }
@@ -90,7 +121,7 @@ impl Interpreter {
     }
 
     fn begin_scope(&mut self) {
-        self.environment.scopes.push(String::new());
+        self.environment.scopes.push(HashMap::new());
         self.environment.level += 1;
     }
 
@@ -158,12 +189,65 @@ impl Interpret for Interpreter {
 
                             Ok(unary(operation, operand_val).to_string())
                         }
-                        Kind::Identifier => todo!(),
+                        Kind::Identifier => {
+                            let current_scope = self.environment.scopes.last().unwrap();
+                            match current_scope.get(&element.value) {
+                                Some(_e) => Ok("call".to_string()),
+                                None => Ok(element.value),
+                            }
+                        }
                         Kind::Literal => match element.value.parse() {
                             Ok(d) => Ok(d),
                             Err(_s) => todo!(),
                         },
-                        Kind::Function => todo!(),
+                        Kind::Function => {
+                            let name = self.interpret()?;
+                            let mut params = vec![];
+
+                            match self.tokens.get(self.position) {
+                                Some(expression) => match expression {
+                                    ParserResult::Atom(e) => params.push(e.value.clone()),
+                                    ParserResult::Expression(parser_results) => {
+                                        for e in parser_results {
+                                            params.push(e.to_string());
+                                        }
+                                    }
+                                },
+                                None => params = vec![],
+                            }
+
+                            self.advance();
+
+                            let mut body: Vec<ParserResult> = vec![];
+                            match self.tokens.get(self.position) {
+                                Some(expression) => match expression {
+                                    ParserResult::Atom(_e) => body.push(expression.clone()),
+                                    ParserResult::Expression(parser_results) => {
+                                        for e in parser_results {
+                                            body.push(e.clone());
+                                        }
+                                    }
+                                },
+                                None => body = vec![],
+                            }
+
+                            self.advance();
+
+                            let function = Function::new(params, body, self.environment.clone());
+                            self.environment.define(name, function);
+
+                            Ok(String::new())
+                        }
+                        Kind::Call => {
+                            let callee = self.interpret()?;
+
+                            if callee == "call" {
+                                let current_scope = self.environment.scopes.last().unwrap();
+                                // current_scope.get(&element.value)
+                            }
+
+                            Ok(String::new())
+                        }
                         Kind::Condition => {
                             let boolean = self.interpret()?;
                             let left_condition = self.interpret()?;
@@ -172,10 +256,8 @@ impl Interpret for Interpreter {
                             match parse_bool(&boolean) {
                                 Ok(b) => {
                                     if b {
-                                        println!("Left: {}", left_condition);
                                         Ok(left_condition)
                                     } else {
-                                        println!("Right: {}", right_condition);
                                         Ok(right_condition)
                                     }
                                 }
