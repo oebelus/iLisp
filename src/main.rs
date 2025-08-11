@@ -49,8 +49,7 @@ fn repl() {
 }
 
 fn main() {
-    // let parser = my_parser().parse("(if (> 5 4) (+ 5 4) (- 5 4))");
-    let parser = my_parser().parse("(define add (x, y) (+ x y))");
+    let parser = my_parser().parse("(if (> 5 4) (format (+ 5 4)) (format (- 5 4)))");
     println!("Parser result: {:?}\n", parser);
     let mut interpreter = Interpreter::new(parser.unwrap().1);
     println!("Interpreter result: {:?}", interpreter.interpret());

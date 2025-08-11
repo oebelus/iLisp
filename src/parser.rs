@@ -1,8 +1,3 @@
-use std::{
-    fmt::Display,
-    ops::{Deref, Index, RangeFrom},
-};
-
 use parsenator::*;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -22,7 +17,6 @@ pub enum Kind {
     LogicalBool,
     Unary,
     Format,
-    Separator,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -44,11 +38,8 @@ impl ToString for ParserResult {
     }
 }
 
-pub fn my_parser<S>() -> impl Parser<'static, S, Vec<ParserResult>>
-where
-    S: AsRef<str> + 'static + Display + Deref<Target = str> + Index<RangeFrom<usize>, Output = S>,
-{
-    move |input: &'static S| match one_or_more(expression()).parse(input) {
+pub fn my_parser() -> impl Parser<'static, Vec<ParserResult>> {
+    move |input: &'static str| match one_or_more(expression()).parse(input) {
         Ok((remaining, result)) => {
             let mapped: Vec<String> = result
                 .iter()
@@ -115,7 +106,6 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                         }
                         Kind::Binary
                     }
-                    "," => Kind::Separator,
                     _ if logical_bool.contains(&value) => Kind::LogicalBool,
                     _ if logical_int.contains(&value) => Kind::LogicalInt,
                     _ if (value.starts_with("\"") && value.ends_with("\""))
@@ -125,43 +115,7 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                     }
                     _ if unary.contains(&value) => Kind::Unary,
                     _ if binary.contains(&value) => Kind::Binary,
-                    _ => {
-                        if let Some(ParserResult::Atom(Element {
-                            kind: Kind::Function,
-                            ..
-                        })) = result.last()
-                        {
-                            // Convert your [String] to a single string first
-                            let remaining_str = remaining.join(" "); // or however you want to join them
-
-                            let (params, new_remaining) = sep_by(
-                                |input: &str| {
-                                    if input.is_empty() {
-                                        return Err(ParseError::EOF);
-                                    }
-
-                                    // Parse a word/token from the string
-                                    let end = input.find(' ').unwrap_or(input.len());
-                                    let token = &input[..end];
-                                    let rest = if end < input.len() {
-                                        &input[end + 1..]
-                                    } else {
-                                        ""
-                                    };
-
-                                    Ok((rest, token.to_string()))
-                                },
-                                ",",
-                            )
-                            .parse(&remaining_str)?;
-                        }
-
-                        result.extend(params);
-                        remaining = new_remaining;
-
-                        println!("{:?}", result.get(result.len() - 1));
-                        Kind::Identifier
-                    }
+                    _ => Kind::Identifier,
                 };
 
                 result.push(ParserResult::Atom(Element {
@@ -209,10 +163,7 @@ pub fn convert(tokens: &[String]) -> Vec<ParserResult> {
     }
 }
 
-pub fn atom<'a, S>() -> Box<dyn Parser<'a, S, Types<'a>> + 'a>
-where
-    S: AsRef<str> + Deref<Target = str> + 'a + Display + Index<RangeFrom<usize>, Output = S>,
-{
+pub fn atom<'a>() -> Box<dyn Parser<'a, Types<'a>> + 'a> {
     choice(vec![
         skip(spaces()),
         word(),
@@ -223,20 +174,14 @@ where
     ])
 }
 
-fn expression<S>() -> Box<dyn Parser<'static, S, Types<'static>> + 'static>
-where
-    S: AsRef<str> + 'static + Deref<Target = str> + Display + Index<RangeFrom<usize>, Output = S>,
-{
+fn expression() -> Box<dyn Parser<'static, Types<'static>> + 'static> {
     choice(vec![
         atom(),
         Box::new(move |input| paren_expr().parse(input)),
     ])
 }
 
-fn paren_expr<S>() -> Box<dyn Parser<'static, S, Types<'static>> + 'static>
-where
-    S: AsRef<str> + 'static + Deref<Target = str> + Display + Index<RangeFrom<usize>, Output = S>,
-{
+fn paren_expr() -> Box<dyn Parser<'static, Types<'static>> + 'static> {
     Box::new(between(
         char('('),
         Box::new(move |input| {
