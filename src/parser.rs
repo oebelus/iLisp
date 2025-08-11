@@ -131,20 +131,29 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                             ..
                         })) = result.last()
                         {
+                            // Convert your [String] to a single string first
+                            let remaining_str = remaining.join(" "); // or however you want to join them
+
                             let (params, new_remaining) = sep_by(
-                                |input: &[String]| {
+                                |input: &str| {
                                     if input.is_empty() {
                                         return Err(ParseError::EOF);
-                                    } else {
-                                        Ok((
-                                            input.chars().nth(0).unwrap().to_string().as_str(),
-                                            input[1..].to_string(),
-                                        ))
                                     }
+
+                                    // Parse a word/token from the string
+                                    let end = input.find(' ').unwrap_or(input.len());
+                                    let token = &input[..end];
+                                    let rest = if end < input.len() {
+                                        &input[end + 1..]
+                                    } else {
+                                        ""
+                                    };
+
+                                    Ok((rest, token.to_string()))
                                 },
                                 ",",
                             )
-                            .parse(remaining)?;
+                            .parse(&remaining_str)?;
                         }
 
                         result.extend(params);
