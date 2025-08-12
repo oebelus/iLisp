@@ -17,7 +17,7 @@ pub enum Kind {
     LogicalBool,
     Unary,
     Format,
-    Call,
+    // Call,
 }
 
 #[derive(PartialEq, Debug, Clone)]

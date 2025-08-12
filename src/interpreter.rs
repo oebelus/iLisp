@@ -57,21 +57,21 @@ pub enum InterpretError {
 pub struct Interpreter {
     tokens: Vec<ParserResult>,
     position: usize,
+    result: String,
     environment: Environment,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Environment {
     scopes: Vec<HashMap<String, Function>>,
     level: i32,
-    values: Vec<HashMap<String, Function>>,
 }
 
 pub trait Interpret {
     fn interpret(&mut self) -> Result<String, InterpretError>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Function {
     params: Vec<String>,
     body: Vec<ParserResult>,
@@ -105,10 +105,10 @@ impl Interpreter {
             tokens,
             position: 0,
             environment: Environment {
-                scopes: vec![],
+                scopes: vec![HashMap::new()],
                 level: 0,
-                values: vec![],
             },
+            result: String::new(),
         }
     }
 
@@ -140,7 +140,6 @@ impl Interpret for Interpreter {
         match self.current_token() {
             Some(token) => {
                 let token_clone = token.clone();
-
                 self.advance();
 
                 match token_clone {
@@ -190,10 +189,23 @@ impl Interpret for Interpreter {
                             Ok(unary(operation, operand_val).to_string())
                         }
                         Kind::Identifier => {
+                            // println!("Identifier call: {:?}", self.environment);
                             let current_scope = self.environment.scopes.last().unwrap();
+                            // println!("Current scope: {:?}", current_scope);
                             match current_scope.get(&element.value) {
-                                Some(_e) => Ok("call".to_string()),
-                                None => Ok(element.value),
+                                Some(e) => {
+                                    // self.begin_scope();
+
+                                    println!("Function: {:?}", e);
+                                    self.end_scope();
+
+                                    println!("Function call");
+                                    Ok("call".to_string())
+                                }
+                                None => {
+                                    println!("Identifier: {}", element.value);
+                                    Ok(element.value)
+                                }
                             }
                         }
                         Kind::Literal => match element.value.parse() {
@@ -221,8 +233,12 @@ impl Interpret for Interpreter {
                             let mut body: Vec<ParserResult> = vec![];
                             match self.tokens.get(self.position) {
                                 Some(expression) => match expression {
-                                    ParserResult::Atom(_e) => body.push(expression.clone()),
+                                    ParserResult::Atom(_e) => {
+                                        println!("Expression {:?}", expression);
+                                        body.push(expression.clone())
+                                    }
                                     ParserResult::Expression(parser_results) => {
+                                        println!("Parser Results {:?}", parser_results);
                                         for e in parser_results {
                                             body.push(e.clone());
                                         }
@@ -231,20 +247,19 @@ impl Interpret for Interpreter {
                                 None => body = vec![],
                             }
 
+                            println!("Length: {}, position: {}", self.tokens.len(), self.position);
+                            // println!("TOKENS:");
+                            // for e in self.tokens.clone() {
+                            //     println!("* {:?}", e);
+                            // }
+
                             self.advance();
 
                             let function = Function::new(params, body, self.environment.clone());
                             self.environment.define(name, function);
 
-                            Ok(String::new())
-                        }
-                        Kind::Call => {
-                            let callee = self.interpret()?;
-
-                            if callee == "call" {
-                                let current_scope = self.environment.scopes.last().unwrap();
-                                // current_scope.get(&element.value)
-                            }
+                            // println!("We are here: {:?}", self.tokens.get(self.position));
+                            // println!("ENV: {:?}", self.environment);
 
                             Ok(String::new())
                         }
@@ -314,7 +329,17 @@ impl Interpret for Interpreter {
                     },
                     ParserResult::Expression(parser_results) => {
                         let mut sub_interpreter = Interpreter::new(parser_results);
-                        sub_interpreter.interpret()
+                        let result = sub_interpreter.interpret()?;
+
+                        println!("Result: {result}");
+
+                        if self.position < self.tokens.len() {
+                            let next_result = self.interpret()?;
+                            self.result.push_str(&result);
+                            Ok(format!("{} {}", result, next_result))
+                        } else {
+                            Ok(result)
+                        }
                     }
                 }
             }
