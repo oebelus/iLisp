@@ -1,9 +1,13 @@
+// #![feature(unboxed_closures)]
+// #![feature(fn_traits)]
+
 mod interpreter;
 mod parser;
 mod tokenizer;
 mod tokens;
 
 use std::{
+    collections::HashMap,
     io::{stdin, stdout, Write},
     process::exit,
 };
@@ -50,10 +54,14 @@ fn repl() {
 
 fn main() {
     // let parser = my_parser().parse("(if (> 5 4) (+ 5 4) (- 5 4))");
-    // let parser = my_parser().parse("(define add (x y) (+ x y)) (add (5 4))");
-    let parser = my_parser().parse("(* (+ 5 4) 2) (+ 3 1)");
+    let parser = my_parser().parse("(define add (x y) (+ x y)) (add 5 4)");
+    // let parser = my_parser().parse("(* (+ 5 4) 2) (+ 3 1)");
 
     println!("Parser result: {:?}\n", parser);
-    let mut interpreter = Interpreter::new(parser.unwrap().1);
-    println!("Interpreter result: {:?}", interpreter.interpret());
+    let mut env = interpreter::Environment {
+        scopes: vec![HashMap::new()],
+        level: 0,
+    };
+    let mut interpreter = Interpreter::new(parser.unwrap().1, &mut env);
+    println!("Interpreter result: {:?}", interpreter.get_result());
 }
