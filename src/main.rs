@@ -1,6 +1,3 @@
-// #![feature(unboxed_closures)]
-// #![feature(fn_traits)]
-
 mod interpreter;
 mod parser;
 mod tokenizer;
@@ -54,7 +51,7 @@ fn repl() {
 
 fn main() {
     // let parser = my_parser().parse("(if (> 5 4) (+ 5 4) (- 5 4))");
-    let parser = my_parser().parse("(define add (x y) (+ x y)) (add 5 4)");
+    let parser = my_parser().parse("(define mul (x y) (* x y)) (mul 5 4)");
     // let parser = my_parser().parse("(* (+ 5 4) 2) (+ 3 1)");
 
     println!("Parser result: {:?}\n", parser);

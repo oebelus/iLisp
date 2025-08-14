@@ -1,6 +1,4 @@
-// #![feature(unboxed_closures)]
-
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use crate::parser::*;
 
@@ -81,24 +79,6 @@ pub struct Function {
     closure: Environment,
 }
 
-// impl FnMut<Args> for Function
-// where
-//     Args: Tuple,
-// {
-//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-//         todo!()
-//     }
-// }
-
-// impl Fn<Args> for Function
-// where
-//     Args: Tuple,
-// {
-//     extern "rust-call" fn call(&self, args: ()) -> Self::Output {
-//         self.body
-//     }
-// }
-
 impl Function {
     fn new(params: Vec<String>, body: Vec<ParserResult>, closure: Environment) -> Self {
         Self {
@@ -106,6 +86,45 @@ impl Function {
             body,
             closure,
         }
+    }
+
+    fn apply(
+        &self,
+        args: Vec<String>,
+        interpreter: &mut Interpreter,
+    ) -> Result<String, InterpretError> {
+        if args.len() != self.params.len() {
+            return Err(InterpretError::Expected(format!(
+                "Expected {} arguments, got {}",
+                self.params.len(),
+                args.len()
+            )));
+        }
+
+        let env_clone = interpreter.environment.clone();
+
+        interpreter.begin_scope();
+
+        for (param, arg) in self.params.iter().zip(args.iter()) {
+            interpreter.environment.scopes.last_mut().unwrap().insert(
+                param.clone(),
+                Function {
+                    params: vec![],
+                    body: vec![ParserResult::Atom(Element {
+                        kind: Kind::Literal,
+                        value: arg.clone(),
+                    })],
+                    closure: env_clone.clone(),
+                },
+            );
+        }
+
+        let mut body_interpreter = Interpreter::new(self.body.clone(), interpreter.environment);
+        let result = body_interpreter.interpret_expression()?;
+
+        interpreter.end_scope();
+
+        Ok(result)
     }
 }
 
@@ -221,44 +240,30 @@ impl<'a> Interpret for Interpreter<'a> {
 
                             Ok(unary(operation, operand_val).to_string())
                         }
-                        Kind::Identifier => match self
-                            .environment
-                            .scopes
-                            .get(self.environment.scopes.len() - 1)
-                        {
-                            Some(scope) => match scope.get(&element.value.clone()) {
-                                Some(function) => {
+                        Kind::Identifier => {
+                            if let Some(scope) = self
+                                .environment
+                                .scopes
+                                .get(self.environment.scopes.len() - 1)
+                            {
+                                if let Some(function) = scope.get(&element.value.clone()) {
+                                    let function_clone = function.clone();
                                     let arity = function.params.len();
-                                    let body = function.body.clone();
-
-                                    println!("Function, arity {}, body: {:?}", arity, body);
-
                                     let mut params = Vec::with_capacity(arity);
 
                                     for _ in 0..arity {
-                                        println!("tokens: {:?}", self.tokens.get(self.position));
-
                                         let p = self.interpret_expression()?;
-                                        println!("param: {p}");
-
                                         params.push(p);
                                     }
 
-                                    self.begin_scope();
-
-                                    self.end_scope();
-
-                                    println!("Params: {:?}", params);
-
-                                    Ok("call".to_string())
-                                }
-                                None => {
-                                    println!("Identifier: {}", element.value);
+                                    function_clone.apply(params, self)
+                                } else {
                                     Ok(element.value)
                                 }
-                            },
-                            None => todo!(),
-                        },
+                            } else {
+                                Err(InterpretError::Expected("No scope available".to_string()))
+                            }
+                        }
                         Kind::Literal => match element.value.parse() {
                             Ok(d) => Ok(d),
                             Err(_s) => todo!(),
