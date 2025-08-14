@@ -50,9 +50,7 @@ fn repl() {
 }
 
 fn main() {
-    // let parser = my_parser().parse("(if (> 5 4) (+ 5 4) (- 5 4))");
     let parser = my_parser().parse("(define mul (x y) (* x y)) (mul 5 4)");
-    // let parser = my_parser().parse("(* (+ 5 4) 2) (+ 3 1)");
 
     println!("Parser result: {:?}\n", parser);
     let mut env = interpreter::Environment {

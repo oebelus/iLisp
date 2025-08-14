@@ -212,6 +212,7 @@ impl<'a> Interpret for Interpreter<'a> {
 
                             let left_val: i32 =
                                 left.parse().map_err(|_| InterpretError::ParseError)?;
+                            println!("Operation: {:?}", operation);
 
                             match right {
                                 Ok(r) => {
@@ -235,10 +236,19 @@ impl<'a> Interpret for Interpreter<'a> {
                                 })?
                                 .clone();
 
-                            let operand_val: i32 =
-                                operand.parse().map_err(|_| InterpretError::ParseError)?;
-
-                            Ok(unary(operation, operand_val).to_string())
+                            match operand.parse() {
+                                Ok(int) => Ok(unary(operation, int).to_string()),
+                                Err(_) => match parse_bool(&operand) {
+                                    Ok(b) => {
+                                        if b == false {
+                                            Ok("true".to_owned())
+                                        } else {
+                                            Ok("false".to_owned())
+                                        }
+                                    }
+                                    Err(_) => todo!(),
+                                },
+                            }
                         }
                         Kind::Identifier => {
                             if let Some(scope) = self
@@ -289,10 +299,7 @@ impl<'a> Interpret for Interpreter<'a> {
                             let mut body: Vec<ParserResult> = vec![];
                             match self.tokens.get(self.position) {
                                 Some(expression) => match expression {
-                                    ParserResult::Atom(_e) => {
-                                        println!("Expression {:?}", expression);
-                                        body.push(expression.clone())
-                                    }
+                                    ParserResult::Atom(_e) => body.push(expression.clone()),
                                     ParserResult::Expression(parser_results) => {
                                         for e in parser_results {
                                             body.push(e.clone());
@@ -329,7 +336,7 @@ impl<'a> Interpret for Interpreter<'a> {
                             }
                         }
                         Kind::Format => todo!(),
-                        Kind::LogicalInt => {
+                        Kind::Comparison => {
                             let operation = create_logic_map()
                                 .get(element.value.as_str())
                                 .ok_or_else(|| {
@@ -350,9 +357,10 @@ impl<'a> Interpret for Interpreter<'a> {
                             let right_val: i32 =
                                 right.parse().map_err(|_| InterpretError::ParseError)?;
 
-                            Ok(logical_int(operation, left_val, right_val)?.to_string())
+                            Ok(comparison(operation, left_val, right_val)?.to_string())
                         }
-                        Kind::LogicalBool => {
+                        Kind::Bool => Ok(element.value),
+                        Kind::Logical => {
                             let operation = create_logic_map()
                                 .get(element.value.as_str())
                                 .ok_or_else(|| {
@@ -365,12 +373,16 @@ impl<'a> Interpret for Interpreter<'a> {
 
                             let left = self.interpret_expression()?;
 
-                            let right = self.interpret_expression()?;
+                            let right = self.interpret_expression().expect(&format!(
+                                "{:?} operation expects two operands.",
+                                operation
+                            ));
 
-                            let left_val: bool = parse_bool(&left).unwrap();
-                            let right_val: bool = parse_bool(&right).unwrap();
+                            let left_val: bool = parse_bool(&left).expect("No operands found.");
+                            let right_val: bool = parse_bool(&right)
+                                .expect(&format!("{:?} operation expects two operands", operation));
 
-                            Ok(logical_bool(operation, left_val, right_val)?.to_string())
+                            Ok(logical(operation, left_val, right_val)?.to_string())
                         }
                     },
                     ParserResult::Expression(parser_results) => {
@@ -397,7 +409,7 @@ fn binary(operation: Operation, left: i32, right: i32) -> i32 {
     }
 }
 
-fn logical_int(operation: Operation, left: i32, right: i32) -> Result<bool, InterpretError> {
+fn comparison(operation: Operation, left: i32, right: i32) -> Result<bool, InterpretError> {
     match operation {
         Operation::Lt => Ok(left < right),
         Operation::Lte => Ok(left <= right),
@@ -411,7 +423,7 @@ fn logical_int(operation: Operation, left: i32, right: i32) -> Result<bool, Inte
     }
 }
 
-fn logical_bool(operation: Operation, left: bool, right: bool) -> Result<bool, InterpretError> {
+fn logical(operation: Operation, left: bool, right: bool) -> Result<bool, InterpretError> {
     match operation {
         Operation::And => Ok(left && right),
         Operation::Or => Ok(left || right),
@@ -424,8 +436,12 @@ fn logical_bool(operation: Operation, left: bool, right: bool) -> Result<bool, I
 
 fn unary(operation: Operation, left: i32) -> i32 {
     match operation {
-        Operation::Neg => -left,
-        Operation::Not => !left,
+        Operation::Sub => -left,
+        Operation::Not => match left {
+            0 => 1,
+            1 => 0,
+            _ => 0,
+        },
         _ => 0,
     }
 }
