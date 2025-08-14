@@ -59,11 +59,12 @@ s_expression ::= atom | "(" <s_expression> "." <s_expression> ")"
 - Function calls:
 
 ```lisp
-(add 5 (mul 5.1 4))
+(add 5 (mul 5 4))
 ```
 
 ## To-Dos
 
 - [ ] Format
+- [ ] Float
 - [ ] REPL
 - [ ] More tests
