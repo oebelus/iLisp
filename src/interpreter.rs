@@ -54,6 +54,7 @@ pub enum InterpretError {
     IndexOutOfBounds,
 }
 
+#[derive(Debug)]
 pub struct Interpreter<'a> {
     tokens: Vec<ParserResult>,
     position: usize,
@@ -63,7 +64,7 @@ pub struct Interpreter<'a> {
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    pub scopes: Vec<HashMap<String, Function>>,
+    pub scopes: Vec<HashMap<String, Binding>>,
     pub level: i32,
 }
 
@@ -77,6 +78,12 @@ pub struct Function {
     params: Vec<String>,
     body: Vec<ParserResult>,
     closure: Environment,
+}
+
+#[derive(Clone, Debug)]
+pub enum Binding {
+    Function(Function),
+    Value(String),
 }
 
 impl Function {
@@ -101,41 +108,40 @@ impl Function {
             )));
         }
 
-        let env_clone = interpreter.environment.clone();
-
         interpreter.begin_scope();
 
         for (param, arg) in self.params.iter().zip(args.iter()) {
-            interpreter.environment.scopes.last_mut().unwrap().insert(
-                param.clone(),
-                Function {
-                    params: vec![],
-                    body: vec![ParserResult::Atom(Element {
-                        kind: Kind::Literal,
-                        value: arg.clone(),
-                    })],
-                    closure: env_clone.clone(),
-                },
-            );
+            interpreter
+                .environment
+                .define(param.clone(), Binding::Value(arg.clone()));
         }
 
         let mut body_interpreter = Interpreter::new(self.body.clone(), interpreter.environment);
-        let result = body_interpreter.interpret_expression()?;
+        let result = body_interpreter.interpret_expression();
 
         interpreter.end_scope();
 
-        Ok(result)
+        result
     }
 }
 
 impl Environment {
-    pub fn define(&mut self, name: String, function: Function) {
+    pub fn define(&mut self, name: String, function: Binding) {
         if self.scopes.is_empty() {
             self.scopes.push(HashMap::new());
         }
 
         let current_scope = self.scopes.last_mut().unwrap();
         current_scope.insert(name, function);
+    }
+
+    pub fn lookup(&self, name: &str) -> Option<&Binding> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(function) = scope.get(name) {
+                return Some(function);
+            }
+        }
+        None
     }
 }
 
@@ -168,8 +174,10 @@ impl<'a> Interpreter<'a> {
     }
 
     fn end_scope(&mut self) {
-        self.environment.scopes.pop();
-        self.environment.level -= 1;
+        if !self.environment.scopes.is_empty() {
+            self.environment.scopes.pop();
+            self.environment.level -= 1;
+        }
     }
 }
 
@@ -180,14 +188,20 @@ impl<'a> Interpret for Interpreter<'a> {
         while self.position < self.tokens.len() {
             match self.interpret_expression() {
                 Ok(r) => {
-                    results.push(r);
+                    if !r.is_empty() {
+                        results.push(r);
+                    }
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    println!("Error at position {}: {:?}", self.position, e);
+                    return Err(e);
+                }
             }
         }
         self.result.push_str(&results.join(" "));
         Ok(())
     }
+
     fn interpret_expression(&mut self) -> Result<String, InterpretError> {
         match self.current_token() {
             Some(token) => {
@@ -212,7 +226,6 @@ impl<'a> Interpret for Interpreter<'a> {
 
                             let left_val: i32 =
                                 left.parse().map_err(|_| InterpretError::ParseError)?;
-                            println!("Operation: {:?}", operation);
 
                             match right {
                                 Ok(r) => {
@@ -250,89 +263,80 @@ impl<'a> Interpret for Interpreter<'a> {
                                 },
                             }
                         }
-                        Kind::Identifier => {
-                            if let Some(scope) = self
-                                .environment
-                                .scopes
-                                .get(self.environment.scopes.len() - 1)
-                            {
-                                if let Some(function) = scope.get(&element.value.clone()) {
-                                    let function_clone = function.clone();
-                                    let arity = function.params.len();
-                                    let mut params = Vec::with_capacity(arity);
+                        Kind::Identifier => match self.environment.lookup(&element.value) {
+                            Some(Binding::Function(function)) => {
+                                let function_clone = function.clone();
+                                let arity = function.params.len();
 
-                                    for _ in 0..arity {
-                                        let p = self.interpret_expression()?;
-                                        params.push(p);
-                                    }
-
-                                    function_clone.apply(params, self)
-                                } else {
-                                    Ok(element.value)
+                                if arity == 0 {
+                                    return function_clone.apply(vec![], self);
                                 }
-                            } else {
-                                Err(InterpretError::Expected("No scope available".to_string()))
+
+                                let mut params = Vec::with_capacity(arity);
+
+                                for _ in 0..arity {
+                                    let p = self.interpret_expression()?;
+                                    params.push(p);
+                                }
+
+                                function_clone.apply(params, self)
                             }
-                        }
-                        Kind::Literal => match element.value.parse() {
-                            Ok(d) => Ok(d),
-                            Err(_s) => todo!(),
+                            Some(Binding::Value(val)) => Ok(val.clone()),
+                            None => Ok(element.value),
                         },
+                        Kind::Literal => Ok(element.value),
                         Kind::Function => {
                             let name = self.interpret_expression()?;
+
+                            // Parse Parameters
                             let mut params = vec![];
 
-                            match self.tokens.get(self.position) {
-                                Some(expression) => match expression {
-                                    ParserResult::Atom(e) => params.push(e.value.clone()),
-                                    ParserResult::Expression(parser_results) => {
-                                        for e in parser_results {
-                                            params.push(e.to_string());
-                                        }
+                            match self.current_token() {
+                                Some(ParserResult::Atom(e)) => params.push(e.value.clone()),
+                                Some(ParserResult::Expression(parser_results)) => {
+                                    for result in parser_results {
+                                        params.push(result.to_string());
                                     }
-                                },
-                                None => params = vec![],
+                                }
+                                None => {}
                             }
 
                             self.advance();
 
+                            // Parse Body
                             let mut body: Vec<ParserResult> = vec![];
-                            match self.tokens.get(self.position) {
-                                Some(expression) => match expression {
-                                    ParserResult::Atom(_e) => body.push(expression.clone()),
-                                    ParserResult::Expression(parser_results) => {
-                                        for e in parser_results {
-                                            body.push(e.clone());
-                                        }
-                                    }
-                                },
-                                None => body = vec![],
+                            match self.current_token() {
+                                Some(expression) => body.push(expression.clone()),
+                                None => {
+                                    return Err(InterpretError::Expected(
+                                        "Expected function body".to_string(),
+                                    ))
+                                }
                             }
 
                             self.advance();
 
+                            // Create Function
                             let function = Function::new(params, body, self.environment.clone());
-                            self.environment.define(name, function);
+                            self.environment.define(name, Binding::Function(function));
 
                             Ok(String::new())
                         }
                         Kind::Condition => {
                             let boolean = self.interpret_expression()?;
-                            let left_condition = self.interpret_expression()?;
-                            let right_condition = self.interpret_expression()?;
 
-                            match parse_bool(&boolean) {
-                                Ok(b) => {
-                                    if b {
-                                        Ok(left_condition)
-                                    } else {
-                                        Ok(right_condition)
-                                    }
+                            match boolean.as_str() {
+                                "true" => {
+                                    let left_condition = self.interpret_expression()?; // Only evaluate then branch
+                                    self.advance();
+                                    Ok(left_condition)
                                 }
-                                Err(e) => Err(InterpretError::Expected(format!(
-                                    "Expected a boolean expression, found {}. Error message: {}",
-                                    boolean, e
-                                ))),
+                                "false" => {
+                                    self.advance();
+                                    let right_condition = self.interpret_expression()?; // Only evaluate else branch
+                                    Ok(right_condition)
+                                }
+                                _ => Err(InterpretError::IndexOutOfBounds),
                             }
                         }
                         Kind::Format => todo!(),
@@ -357,7 +361,9 @@ impl<'a> Interpret for Interpreter<'a> {
                             let right_val: i32 =
                                 right.parse().map_err(|_| InterpretError::ParseError)?;
 
-                            Ok(comparison(operation, left_val, right_val)?.to_string())
+                            let result = comparison(operation, left_val, right_val)?;
+
+                            Ok(result.to_string())
                         }
                         Kind::Bool => Ok(element.value),
                         Kind::Logical => {
@@ -388,9 +394,7 @@ impl<'a> Interpret for Interpreter<'a> {
                     ParserResult::Expression(parser_results) => {
                         let mut sub_interpreter =
                             Interpreter::new(parser_results, self.environment);
-                        let result = sub_interpreter.interpret_expression()?;
-
-                        Ok(result)
+                        sub_interpreter.interpret_expression()
                     }
                 }
             }
@@ -399,11 +403,18 @@ impl<'a> Interpret for Interpreter<'a> {
     }
 }
 
+// Helper Functions
+
 fn binary(operation: Operation, left: i32, right: i32) -> i32 {
     match operation {
         Operation::Add => left + right,
         Operation::Mul => left * right,
-        Operation::Div => left / right,
+        Operation::Div => {
+            if right == 0 {
+                panic!("Division by zero");
+            }
+            left / right
+        }
         Operation::Sub => left - right,
         _ => 0,
     }

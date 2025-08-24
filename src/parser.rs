@@ -168,6 +168,7 @@ pub fn convert(tokens: &[String]) -> Vec<ParserResult> {
 pub fn atom<'a>() -> Box<dyn Parser<'a, Types<'a>> + 'a> {
     choice(vec![
         skip(spaces()),
+        float(),
         word(),
         alpha_num_word(),
         digits(),
