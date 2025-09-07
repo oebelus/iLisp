@@ -239,7 +239,6 @@ impl<'a> Interpret for Interpreter<'a> {
                                         println!("tokens: {:?}", self.tokens.get(self.position));
 
                                         let p = self.interpret_expression()?;
-                                        println!("param: {p}");
 
                                         params.push(p);
                                     }
