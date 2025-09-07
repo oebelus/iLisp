@@ -1,6 +1,3 @@
-// #![feature(unboxed_closures)]
-// #![feature(fn_traits)]
-
 mod interpreter;
 mod parser;
 mod tokenizer;
@@ -53,9 +50,30 @@ fn repl() {
 }
 
 fn main() {
-    // let parser = my_parser().parse("(if (> 5 4) (+ 5 4) (- 5 4))");
-    let parser = my_parser().parse("(define add (x y) (+ x y)) (add 5 4)");
-    // let parser = my_parser().parse("(* (+ 5 4) 2) (+ 3 1)");
+    // let parser = my_parser().parse(
+    //     "
+
+    // (define doublen (n)
+    //     (* n 2))
+
+    // (define fib (n)
+    //     (if (< n 2)
+    //         n
+    //         (+ (fib (- n 1))
+    //             (fib (- n 2)))))
+
+    // (define fact (n)
+    //     (if (<= n 1)
+    //         1
+    //         (* n (fact (- n 1)))))
+
+    // (doublen 5)
+    // (fib 7)
+    // (fact 5)
+    // ",
+    // );
+
+    let parser = my_parser().parse("(+ 0.5 5.7)");
 
     println!("Parser result: {:?}\n", parser);
     let mut env = interpreter::Environment {

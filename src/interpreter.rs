@@ -1,6 +1,4 @@
-// #![feature(unboxed_closures)]
-
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use crate::parser::*;
 
@@ -56,6 +54,7 @@ pub enum InterpretError {
     IndexOutOfBounds,
 }
 
+#[derive(Debug)]
 pub struct Interpreter<'a> {
     tokens: Vec<ParserResult>,
     position: usize,
@@ -65,7 +64,7 @@ pub struct Interpreter<'a> {
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    pub scopes: Vec<HashMap<String, Function>>,
+    pub scopes: Vec<HashMap<String, Binding>>,
     pub level: i32,
 }
 
@@ -81,23 +80,11 @@ pub struct Function {
     closure: Environment,
 }
 
-// impl FnMut<Args> for Function
-// where
-//     Args: Tuple,
-// {
-//     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output {
-//         todo!()
-//     }
-// }
-
-// impl Fn<Args> for Function
-// where
-//     Args: Tuple,
-// {
-//     extern "rust-call" fn call(&self, args: ()) -> Self::Output {
-//         self.body
-//     }
-// }
+#[derive(Clone, Debug)]
+pub enum Binding {
+    Function(Function),
+    Value(String),
+}
 
 impl Function {
     fn new(params: Vec<String>, body: Vec<ParserResult>, closure: Environment) -> Self {
@@ -107,16 +94,54 @@ impl Function {
             closure,
         }
     }
+
+    fn apply(
+        &self,
+        args: Vec<String>,
+        interpreter: &mut Interpreter,
+    ) -> Result<String, InterpretError> {
+        if args.len() != self.params.len() {
+            return Err(InterpretError::Expected(format!(
+                "Expected {} arguments, got {}",
+                self.params.len(),
+                args.len()
+            )));
+        }
+
+        interpreter.begin_scope();
+
+        for (param, arg) in self.params.iter().zip(args.iter()) {
+            interpreter
+                .environment
+                .define(param.clone(), Binding::Value(arg.clone()));
+        }
+
+        let mut body_interpreter = Interpreter::new(self.body.clone(), interpreter.environment);
+        let result = body_interpreter.interpret_expression();
+
+        interpreter.end_scope();
+
+        result
+    }
 }
 
 impl Environment {
-    pub fn define(&mut self, name: String, function: Function) {
+    pub fn define(&mut self, name: String, function: Binding) {
         if self.scopes.is_empty() {
             self.scopes.push(HashMap::new());
         }
 
         let current_scope = self.scopes.last_mut().unwrap();
         current_scope.insert(name, function);
+    }
+
+    pub fn lookup(&self, name: &str) -> Option<&Binding> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(function) = scope.get(name) {
+                return Some(function);
+            }
+        }
+        None
     }
 }
 
@@ -149,8 +174,10 @@ impl<'a> Interpreter<'a> {
     }
 
     fn end_scope(&mut self) {
-        self.environment.scopes.pop();
-        self.environment.level -= 1;
+        if !self.environment.scopes.is_empty() {
+            self.environment.scopes.pop();
+            self.environment.level -= 1;
+        }
     }
 }
 
@@ -161,14 +188,20 @@ impl<'a> Interpret for Interpreter<'a> {
         while self.position < self.tokens.len() {
             match self.interpret_expression() {
                 Ok(r) => {
-                    results.push(r);
+                    if !r.is_empty() {
+                        results.push(r);
+                    }
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    println!("Error at position {}: {:?}", self.position, e);
+                    return Err(e);
+                }
             }
         }
         self.result.push_str(&results.join(" "));
         Ok(())
     }
+
     fn interpret_expression(&mut self) -> Result<String, InterpretError> {
         match self.current_token() {
             Some(token) => {
@@ -216,114 +249,98 @@ impl<'a> Interpret for Interpreter<'a> {
                                 })?
                                 .clone();
 
-                            let operand_val: i32 =
-                                operand.parse().map_err(|_| InterpretError::ParseError)?;
-
-                            Ok(unary(operation, operand_val).to_string())
-                        }
-                        Kind::Identifier => match self
-                            .environment
-                            .scopes
-                            .get(self.environment.scopes.len() - 1)
-                        {
-                            Some(scope) => match scope.get(&element.value.clone()) {
-                                Some(function) => {
-                                    let arity = function.params.len();
-                                    let body = function.body.clone();
-
-                                    println!("Function, arity {}, body: {:?}", arity, body);
-
-                                    let mut params = Vec::with_capacity(arity);
-
-                                    for _ in 0..arity {
-                                        println!("tokens: {:?}", self.tokens.get(self.position));
-
-                                        let p = self.interpret_expression()?;
-
-                                        params.push(p);
+                            match operand.parse() {
+                                Ok(int) => Ok(unary(operation, int).to_string()),
+                                Err(_) => match parse_bool(&operand) {
+                                    Ok(b) => {
+                                        if b == false {
+                                            Ok("true".to_owned())
+                                        } else {
+                                            Ok("false".to_owned())
+                                        }
                                     }
+                                    Err(_) => todo!(),
+                                },
+                            }
+                        }
+                        Kind::Identifier => match self.environment.lookup(&element.value) {
+                            Some(Binding::Function(function)) => {
+                                let function_clone = function.clone();
+                                let arity = function.params.len();
 
-                                    self.begin_scope();
-
-                                    self.end_scope();
-
-                                    println!("Params: {:?}", params);
-
-                                    Ok("call".to_string())
+                                if arity == 0 {
+                                    return function_clone.apply(vec![], self);
                                 }
-                                None => {
-                                    println!("Identifier: {}", element.value);
-                                    Ok(element.value)
+
+                                let mut params = Vec::with_capacity(arity);
+
+                                for _ in 0..arity {
+                                    let p = self.interpret_expression()?;
+                                    params.push(p);
                                 }
-                            },
-                            None => todo!(),
+
+                                function_clone.apply(params, self)
+                            }
+                            Some(Binding::Value(val)) => Ok(val.clone()),
+                            None => Ok(element.value),
                         },
-                        Kind::Literal => match element.value.parse() {
-                            Ok(d) => Ok(d),
-                            Err(_s) => todo!(),
-                        },
+                        Kind::Literal => Ok(element.value),
                         Kind::Function => {
                             let name = self.interpret_expression()?;
+
+                            // Parse Parameters
                             let mut params = vec![];
 
-                            match self.tokens.get(self.position) {
-                                Some(expression) => match expression {
-                                    ParserResult::Atom(e) => params.push(e.value.clone()),
-                                    ParserResult::Expression(parser_results) => {
-                                        for e in parser_results {
-                                            params.push(e.to_string());
-                                        }
+                            match self.current_token() {
+                                Some(ParserResult::Atom(e)) => params.push(e.value.clone()),
+                                Some(ParserResult::Expression(parser_results)) => {
+                                    for result in parser_results {
+                                        params.push(result.to_string());
                                     }
-                                },
-                                None => params = vec![],
+                                }
+                                None => {}
                             }
 
                             self.advance();
 
+                            // Parse Body
                             let mut body: Vec<ParserResult> = vec![];
-                            match self.tokens.get(self.position) {
-                                Some(expression) => match expression {
-                                    ParserResult::Atom(_e) => {
-                                        println!("Expression {:?}", expression);
-                                        body.push(expression.clone())
-                                    }
-                                    ParserResult::Expression(parser_results) => {
-                                        for e in parser_results {
-                                            body.push(e.clone());
-                                        }
-                                    }
-                                },
-                                None => body = vec![],
+                            match self.current_token() {
+                                Some(expression) => body.push(expression.clone()),
+                                None => {
+                                    return Err(InterpretError::Expected(
+                                        "Expected function body".to_string(),
+                                    ))
+                                }
                             }
 
                             self.advance();
 
+                            // Create Function
                             let function = Function::new(params, body, self.environment.clone());
-                            self.environment.define(name, function);
+                            self.environment.define(name, Binding::Function(function));
 
                             Ok(String::new())
                         }
                         Kind::Condition => {
                             let boolean = self.interpret_expression()?;
-                            let left_condition = self.interpret_expression()?;
-                            let right_condition = self.interpret_expression()?;
 
-                            match parse_bool(&boolean) {
-                                Ok(b) => {
-                                    if b {
-                                        Ok(left_condition)
-                                    } else {
-                                        Ok(right_condition)
-                                    }
+                            match boolean.as_str() {
+                                "true" => {
+                                    let left_condition = self.interpret_expression()?; // Only evaluate then branch
+                                    self.advance();
+                                    Ok(left_condition)
                                 }
-                                Err(e) => Err(InterpretError::Expected(format!(
-                                    "Expected a boolean expression, found {}. Error message: {}",
-                                    boolean, e
-                                ))),
+                                "false" => {
+                                    self.advance();
+                                    let right_condition = self.interpret_expression()?; // Only evaluate else branch
+                                    Ok(right_condition)
+                                }
+                                _ => Err(InterpretError::IndexOutOfBounds),
                             }
                         }
                         Kind::Format => todo!(),
-                        Kind::LogicalInt => {
+                        Kind::Comparison => {
                             let operation = create_logic_map()
                                 .get(element.value.as_str())
                                 .ok_or_else(|| {
@@ -344,9 +361,12 @@ impl<'a> Interpret for Interpreter<'a> {
                             let right_val: i32 =
                                 right.parse().map_err(|_| InterpretError::ParseError)?;
 
-                            Ok(logical_int(operation, left_val, right_val)?.to_string())
+                            let result = comparison(operation, left_val, right_val)?;
+
+                            Ok(result.to_string())
                         }
-                        Kind::LogicalBool => {
+                        Kind::Bool => Ok(element.value),
+                        Kind::Logical => {
                             let operation = create_logic_map()
                                 .get(element.value.as_str())
                                 .ok_or_else(|| {
@@ -359,20 +379,22 @@ impl<'a> Interpret for Interpreter<'a> {
 
                             let left = self.interpret_expression()?;
 
-                            let right = self.interpret_expression()?;
+                            let right = self.interpret_expression().expect(&format!(
+                                "{:?} operation expects two operands.",
+                                operation
+                            ));
 
-                            let left_val: bool = parse_bool(&left).unwrap();
-                            let right_val: bool = parse_bool(&right).unwrap();
+                            let left_val: bool = parse_bool(&left).expect("No operands found.");
+                            let right_val: bool = parse_bool(&right)
+                                .expect(&format!("{:?} operation expects two operands", operation));
 
-                            Ok(logical_bool(operation, left_val, right_val)?.to_string())
+                            Ok(logical(operation, left_val, right_val)?.to_string())
                         }
                     },
                     ParserResult::Expression(parser_results) => {
                         let mut sub_interpreter =
                             Interpreter::new(parser_results, self.environment);
-                        let result = sub_interpreter.interpret_expression()?;
-
-                        Ok(result)
+                        sub_interpreter.interpret_expression()
                     }
                 }
             }
@@ -381,17 +403,24 @@ impl<'a> Interpret for Interpreter<'a> {
     }
 }
 
+// Helper Functions
+
 fn binary(operation: Operation, left: i32, right: i32) -> i32 {
     match operation {
         Operation::Add => left + right,
         Operation::Mul => left * right,
-        Operation::Div => left / right,
+        Operation::Div => {
+            if right == 0 {
+                panic!("Division by zero");
+            }
+            left / right
+        }
         Operation::Sub => left - right,
         _ => 0,
     }
 }
 
-fn logical_int(operation: Operation, left: i32, right: i32) -> Result<bool, InterpretError> {
+fn comparison(operation: Operation, left: i32, right: i32) -> Result<bool, InterpretError> {
     match operation {
         Operation::Lt => Ok(left < right),
         Operation::Lte => Ok(left <= right),
@@ -405,7 +434,7 @@ fn logical_int(operation: Operation, left: i32, right: i32) -> Result<bool, Inte
     }
 }
 
-fn logical_bool(operation: Operation, left: bool, right: bool) -> Result<bool, InterpretError> {
+fn logical(operation: Operation, left: bool, right: bool) -> Result<bool, InterpretError> {
     match operation {
         Operation::And => Ok(left && right),
         Operation::Or => Ok(left || right),
@@ -418,8 +447,12 @@ fn logical_bool(operation: Operation, left: bool, right: bool) -> Result<bool, I
 
 fn unary(operation: Operation, left: i32) -> i32 {
     match operation {
-        Operation::Neg => -left,
-        Operation::Not => !left,
+        Operation::Sub => -left,
+        Operation::Not => match left {
+            0 => 1,
+            1 => 0,
+            _ => 0,
+        },
         _ => 0,
     }
 }

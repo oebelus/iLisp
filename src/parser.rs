@@ -13,11 +13,11 @@ pub enum Kind {
     Function,
     Condition,
     Binary,
-    LogicalInt,
-    LogicalBool,
+    Comparison,
+    Logical,
     Unary,
     Format,
-    // Call,
+    Bool,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -86,19 +86,19 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                             value = "<=";
                             remaining = &remaining[1..];
                         }
-                        Kind::LogicalInt
+                        Kind::Comparison
                     }
                     ">" => {
                         if remaining[1].as_str() == "=" {
                             value = ">=";
                             remaining = &remaining[1..];
                         }
-                        Kind::LogicalInt
+                        Kind::Comparison
                     }
                     "=" => {
                         value = "==";
                         remaining = &remaining[1..];
-                        Kind::LogicalInt
+                        Kind::Comparison
                     }
                     "*" => {
                         if remaining[1].as_str() == "*" {
@@ -107,8 +107,9 @@ pub fn parse_list(tokens: &[String]) -> Result<(Vec<ParserResult>, &[String]), S
                         }
                         Kind::Binary
                     }
-                    _ if logical_bool.contains(&value) => Kind::LogicalBool,
-                    _ if logical_int.contains(&value) => Kind::LogicalInt,
+                    _ if value == "true" || value == "false" => Kind::Bool,
+                    _ if logical_bool.contains(&value) => Kind::Logical,
+                    _ if logical_int.contains(&value) => Kind::Comparison,
                     _ if (value.starts_with("\"") && value.ends_with("\""))
                         | value.bytes().all(|c| c.is_ascii_digit()) =>
                     {
@@ -167,6 +168,7 @@ pub fn convert(tokens: &[String]) -> Vec<ParserResult> {
 pub fn atom<'a>() -> Box<dyn Parser<'a, Types<'a>> + 'a> {
     choice(vec![
         skip(spaces()),
+        float(),
         word(),
         alpha_num_word(),
         digits(),
