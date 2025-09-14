@@ -224,14 +224,15 @@ impl<'a> Interpret for Interpreter<'a> {
                             let left = self.interpret_expression()?;
                             let right = self.interpret_expression();
 
-                            let left_val: i32 =
+                            let left_val: f32 =
                                 left.parse().map_err(|_| InterpretError::ParseError)?;
 
                             match right {
                                 Ok(r) => {
-                                    let right_val =
+                                    let right_val: f32 =
                                         r.parse().map_err(|_| InterpretError::ParseError).unwrap();
-                                    Ok(binary(operation, left_val, right_val).to_string())
+                                    Ok(binary(operation, left_val as f32, right_val as f32)
+                                        .to_string())
                                 }
                                 Err(_r) => Ok(unary(operation, left_val).to_string()),
                             }
@@ -355,10 +356,10 @@ impl<'a> Interpret for Interpreter<'a> {
 
                             let right = self.interpret_expression()?;
 
-                            let left_val: i32 =
+                            let left_val: f32 =
                                 left.parse().map_err(|_| InterpretError::ParseError)?;
 
-                            let right_val: i32 =
+                            let right_val: f32 =
                                 right.parse().map_err(|_| InterpretError::ParseError)?;
 
                             let result = comparison(operation, left_val, right_val)?;
@@ -405,22 +406,22 @@ impl<'a> Interpret for Interpreter<'a> {
 
 // Helper Functions
 
-fn binary(operation: Operation, left: i32, right: i32) -> i32 {
+fn binary(operation: Operation, left: f32, right: f32) -> f32 {
     match operation {
         Operation::Add => left + right,
         Operation::Mul => left * right,
         Operation::Div => {
-            if right == 0 {
+            if right == 0.0 {
                 panic!("Division by zero");
             }
             left / right
         }
         Operation::Sub => left - right,
-        _ => 0,
+        _ => 0.0,
     }
 }
 
-fn comparison(operation: Operation, left: i32, right: i32) -> Result<bool, InterpretError> {
+fn comparison(operation: Operation, left: f32, right: f32) -> Result<bool, InterpretError> {
     match operation {
         Operation::Lt => Ok(left < right),
         Operation::Lte => Ok(left <= right),
@@ -445,15 +446,15 @@ fn logical(operation: Operation, left: bool, right: bool) -> Result<bool, Interp
     }
 }
 
-fn unary(operation: Operation, left: i32) -> i32 {
+fn unary(operation: Operation, left: f32) -> f32 {
     match operation {
         Operation::Sub => -left,
         Operation::Not => match left {
-            0 => 1,
-            1 => 0,
-            _ => 0,
+            0.0 => 1.0,
+            1.0 => 0.0,
+            _ => 0.0,
         },
-        _ => 0,
+        _ => 0.0,
     }
 }
 
